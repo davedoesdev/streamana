@@ -1,0 +1,3 @@
+[submodule "ffmpeg.js"]
+	path = ffmpeg.js
+	url = git@github.com:davedoesdev/ffmpeg.js.git

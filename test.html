@@ -1,0 +1,146 @@
+<html>
+<head>
+<script type="text/javascript" src="GlslCanvas.js"></script>
+<script type="text/javascript">
+async function init() {
+  const stream_url = window.location.hash.substring(1);
+
+  // capture video from webcam
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: {
+      width: 4096,
+      height: 2160,
+      frameRate: {
+        ideal: 30,
+        max: 30
+      }
+    }
+  });
+
+  // create video element which will be used for grabbing the frames to
+  // write to a canvas so we can apply webgl shaders
+  // also used to get the native video dimensions
+  const video = document.createElement("video");
+  video.muted = true;
+
+  // wait until the video starts
+  video.addEventListener('loadedmetadata', function () {
+    // create a canvas for doing webgl
+    // make it same size as native video dimensions so every pixel is seen
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // use GlslCanvas to make managing webgl stuff easier
+    const gl_canvas = new GlslCanvas(canvas);
+
+    // sample greyscale fragment shader
+    const fragmentShader = `
+precision highp float;
+
+uniform sampler2D u_texture;
+uniform vec2 u_resolution;
+
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  vec3 color = texture2D(u_texture, st).rgb;
+  float grey = dot(color, vec3(0.299, 0.587, 0.114));
+  gl_FragColor = vec4(vec3(grey), 1.0);
+}`;
+    gl_canvas.load(fragmentShader);
+
+    // tell canvas to use frames from video
+    gl_canvas.loadTexture('u_texture', video, { updateInterval: 33 });
+
+    // capture video from the canvas
+    const video_stream = canvas.captureStream(30);
+    video_stream.addTrack(stream.getAudioTracks()[0]);
+
+    // display the video locally so we can see what's going on
+    // note the video seems to set its height automatically to keep the
+    // correct aspect ratio
+    const monitor = document.getElementById('monitor');
+    monitor.srcObject = video_stream;
+    monitor.play();
+
+    const ffmpeg_hls = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
+    ffmpeg_hls.onmessage = function (e) {
+      const msg = e.data;
+      switch (msg.type) {
+        case 'ready':
+          ffmpeg_hls.postMessage({
+            type: 'run',
+            arguments: [
+              '-i', '-',
+              //'-use_wallclock_as_timestamps', '1',
+              '-f', 'hls',
+              '-c:v', 'copy',
+              '-c:a', 'aac',
+              '-b:a', '128k',
+              '-hls_time', '2',
+              '-hls_segment_type', 'mpegts',
+              '-hls_list_size', '2',
+              '/outbound/output.m3u8'
+            ]
+          });
+          break;
+        case 'run':
+          console.log("RUNNING");
+          break;
+        case 'stdout':
+          console.log(msg.data);
+          break;
+        case 'stderr':
+          console.error(msg.data);
+          break;
+        case 'exit':
+          console.log("EXITED", msg.data);
+          recorder.stop();
+          break;
+        case 'done':
+          // due to async stdin read, we get this message immediately
+          //console.log("DONE", msg.data);
+          break;
+        case 'error':
+          console.error("ERROR", msg.data);
+          break;
+        case 'abort':
+          console.error("ABORT", msg.data);
+          break;
+        case 'start-video':
+          ffmpeg_hls.postMessage({
+            type: 'base-url',
+            data: stream_url
+          });
+          // produce data every second, we'll be chunking it anyway
+          recorder.start(1000);
+          break;
+      }
+    };
+
+    // record the video
+    const recorder = new MediaRecorder(video_stream, {
+      mimeType: "video/webm;codecs=H264",
+      audioBitsPerSecond:  128 * 1000,
+      videoBitsPerSecond: 2500 * 1000
+    });
+
+    recorder.ondataavailable = async function (event) {
+      const data = await event.data.arrayBuffer();
+      ffmpeg_hls.postMessage({
+        type: 'video-data',
+        data: data
+      }, [data]);
+    };
+  });
+
+  video.srcObject = stream;
+  video.play();
+}
+</script>
+</head>
+<body onload="init()">
+<video style="width:50%" id="monitor" muted="true"></video>
+</body>
+</html>
