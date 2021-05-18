@@ -1,6 +1,7 @@
 <html>
 <head>
-<script type="text/javascript" src="GlslCanvas.js"></script>
+<script type="text/javascript" src="https://unpkg.com/glsl-canvas-js/dist/umd/glsl-canvas.min.js"></script>
+<script type="text/javascript" src="glsl-canvas.js"></script>
 <script type="text/javascript">
 async function init() {
   const stream_url = window.location.hash.substring(1);
@@ -24,19 +25,32 @@ async function init() {
   const video = document.createElement("video");
   video.muted = true;
 
-  // wait until the video starts
-  video.addEventListener('loadedmetadata', function () {
-    // create a canvas for doing webgl
-    // make it same size as native video dimensions so every pixel is seen
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  // create a canvas for doing webgl
+  const canvas = document.createElement('canvas');
 
-    // use GlslCanvas to make managing webgl stuff easier
-    const gl_canvas = new GlslCanvas(canvas);
+  // use glsl-canvas to make managing webgl stuff easier
+  const gl_canvas = new glsl.Canvas(new Proxy(canvas, {
+    get: function (target, name, receiver) {
+      if (name === 'getBoundingClientRect') {
+        return () => new DOMRect(0, 0, target.width, target.height);
+      }
+      if (name === 'clientWidth') {
+        return target.width;
+      }
+      if (name === 'clientHeight') {
+        return target.height;
+      }
+      const r = target[name];
+      return typeof r === 'function' ? r.bind(target) : r;
+    },
+    set: function (target, name, value) {
+      target[name] = value;
+      return true;
+    }
+  }));
 
-    // sample greyscale fragment shader
-    const fragmentShader = `
+  // sample greyscale fragment shader
+  const fragmentShader = `
 precision highp float;
 
 uniform sampler2D u_texture;
@@ -48,21 +62,37 @@ void main() {
   float grey = dot(color, vec3(0.299, 0.587, 0.114));
   gl_FragColor = vec4(vec3(grey), 1.0);
 }`;
-    gl_canvas.load(fragmentShader);
+  gl_canvas.load(fragmentShader);
 
-    // tell canvas to use frames from video
-    gl_canvas.loadTexture('u_texture', video, { updateInterval: 33 });
+  // tell canvas to use frames from video
+  // TODO: can we set update interval?
+  gl_canvas.setTexture('u_texture', video, /*{ updateInterval: 33 }*/);
+
+  video.addEventListener('loadeddata', function () {
+    // make canvas same size as native video dimensions so every pixel is seen
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    this.play();
 
     // capture video from the canvas
     const video_stream = canvas.captureStream(30);
     video_stream.addTrack(stream.getAudioTracks()[0]);
 
-    // display the video locally so we can see what's going on
-    // note the video seems to set its height automatically to keep the
-    // correct aspect ratio
-    const monitor = document.getElementById('monitor');
-    monitor.srcObject = video_stream;
-    monitor.play();
+    // record the video
+    const recorder = new MediaRecorder(video_stream, {
+      mimeType: "video/webm;codecs=H264",
+      audioBitsPerSecond:  128 * 1000,
+      videoBitsPerSecond: 2500 * 1000
+    });
+
+    // push encoded data into the ffmpeg worker
+    recorder.ondataavailable = async function (event) {
+      const data = await event.data.arrayBuffer();
+      ffmpeg_hls.postMessage({
+        type: 'video-data',
+        data: data
+      }, [data]);
+    };
 
     const ffmpeg_hls = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
     ffmpeg_hls.onmessage = function (e) {
@@ -119,24 +149,15 @@ void main() {
       }
     };
 
-    // record the video
-    const recorder = new MediaRecorder(video_stream, {
-      mimeType: "video/webm;codecs=H264",
-      audioBitsPerSecond:  128 * 1000,
-      videoBitsPerSecond: 2500 * 1000
-    });
-
-    recorder.ondataavailable = async function (event) {
-      const data = await event.data.arrayBuffer();
-      ffmpeg_hls.postMessage({
-        type: 'video-data',
-        data: data
-      }, [data]);
-    };
+    // display the video locally so we can see what's going on
+    // note the video seems to set its height automatically to keep the
+    // correct aspect ratio
+    const monitor = document.getElementById('monitor');
+    monitor.srcObject = video_stream;
+    monitor.play();
   });
 
   video.srcObject = stream;
-  video.play();
 }
 </script>
 </head>
