@@ -15,11 +15,29 @@ class GlCanvas extends glsl.Canvas {
   }
 }
 
-async function init() {
-  const stream_url = window.location.hash.substring(1);
+let stream_url_el, start_el, stop_el, pause_el, resume_el, monitor_el;
+
+function init() {
+  stream_url_el = document.getElementById('stream_url');
+  start_el = document.getElementById('start');
+  stop_el = document.getElementById('stop');
+  pause_el = document.getElementById('pause');
+  resume_el = document.getElementById('resume');
+  monitor_el = document.getElementById('monitor');
+}
+
+let camera_stream, gl_canvas, canvas_stream, recorder, ffmpeg_hls;
+
+async function start() {
+  const stream_url = stream_url_el.value.trim();
+  if (!stream_url) {
+    return;
+  }
+
+  start_el.disabled = true;
 
   // capture video from webcam
-  const stream = await navigator.mediaDevices.getUserMedia({
+  camera_stream = await navigator.mediaDevices.getUserMedia({
     audio: true,
     video: {
       width: 4096,
@@ -43,7 +61,7 @@ async function init() {
   // use glsl-canvas to make managing webgl stuff easier
   // because it's not visible, client dimensions are zero so we
   // need to substitute actual dimensions instead
-  const gl_canvas = new GlCanvas(new Proxy(canvas, {
+  gl_canvas = new GlCanvas(new Proxy(canvas, {
     get: function (target, name, receiver) {
       if (name === 'getBoundingClientRect') {
         return () => new DOMRect(0, 0, target.width, target.height);
@@ -92,12 +110,12 @@ void main() {
     this.play();
 
     // capture video from the canvas
-    const video_stream = canvas.captureStream(30);
-    video_stream.addTrack(stream.getAudioTracks()[0]);
+    canvas_stream = canvas.captureStream(30);
+    canvas_stream.addTrack(camera_stream.getAudioTracks()[0]);
 
     // set up video recording from the canvas; note we don't start
     // recording until ffmpeg has started (below)
-    const recorder = new MediaRecorder(video_stream, {
+    recorder = new MediaRecorder(canvas_stream, {
       mimeType: "video/webm;codecs=H264",
       audioBitsPerSecond:  128 * 1000,
       videoBitsPerSecond: 2500 * 1000
@@ -113,12 +131,12 @@ void main() {
     };
 
     // start ffmpeg in a worker
-    const ffmpeg_hls = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
+    ffmpeg_hls = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
     ffmpeg_hls.onmessage = function (e) {
       const msg = e.data;
       switch (msg.type) {
         case 'ready':
-          ffmpeg_hls.postMessage({
+          this.postMessage({
             type: 'run',
             arguments: [
               '-i', '-', // our worker will simulate stdin
@@ -145,7 +163,12 @@ void main() {
           break;
         case 'exit':
           console.log("EXITED", msg.data);
-          recorder.stop();
+          if (recorder.state !== 'inactive') {
+            recorder.stop();
+          }
+          this.terminate();
+          monitor_el.srcObject = null;
+          start_el.disabled = false;
           break;
         case 'done':
           // due to async stdin read, we get this message immediately
@@ -158,12 +181,11 @@ void main() {
           console.error("ABORT", msg.data);
           break;
         case 'start-video':
-          ffmpeg_hls.postMessage({
+          this.postMessage({
             type: 'base-url',
             data: stream_url
           });
-          // start recording; produce data every second,
-          // we'll be chunking it anyway
+          // start recording; produce data every second, we'll be chunking it anyway
           recorder.start(1000);
           break;
       }
@@ -172,17 +194,63 @@ void main() {
     // display the video locally so we can see what's going on
     // note the video seems to set its height automatically to keep the
     // correct aspect ratio
-    const monitor = document.getElementById('monitor');
-    monitor.srcObject = video_stream;
-    monitor.play();
+    monitor_el.srcObject = canvas_stream;
+    monitor_el.play();
+
+    stop_el.disabled = false;
+    pause_el.disabled = false;
+    resume_el.disabled = true;
   });
 
-  // pass the stream from the camera
-  video.srcObject = stream;
+  // pass the stream from the camera to the video so it can render the frames
+  video.srcObject = camera_stream;
+}
+
+function stop() {
+  stop_el.disabled = true;
+  pause_el.disabled = true;
+  resume_el.disabled = true;
+
+  for (let track of camera_stream.getTracks()) {
+    track.stop();
+  }
+
+  gl_canvas.destroy();
+
+  for (let track of canvas_stream.getTracks()) {
+    track.stop();
+  }
+  
+  ffmpeg_hls.postMessage({
+    type: 'video-ended'
+  });
+}
+
+function pause() {
+  for (let track of camera_stream.getTracks()) {
+    track.enabled = false;
+  }
+  pause_el.disabled = true;
+  resume_el.disabled = false;
+}
+
+function resume() {
+  for (let track of camera_stream.getTracks()) {
+    track.enabled = true;
+  }
+  pause_el.disabled = false;
+  resume_el.disabled = true;
 }
 </script>
 </head>
 <body onload="init()">
-<video style="width:50%" id="monitor" muted="true"></video>
+<p>
+  <input id=stream_url type="text" placeholder="Youtube Stream URL">
+  <input id=start type="button" value="Start" onclick="start()">
+  <input id=stop type="button" value="Stop" disabled onclick="stop()">
+  <input id=pause type="button" value="Pause" disabled onclick="pause()">
+  <input id=resume type="button" value="Resume" disabled onclick="resume()">
+</p>
+<video id="monitor" style="width:100%" muted="true"></video>
 </body>
 </html>
