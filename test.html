@@ -15,15 +15,14 @@ class GlCanvas extends glsl.Canvas {
   }
 }
 
-let stream_url_el, start_el, stop_el, pause_el, resume_el, monitor_el;
+let stream_url_el, start_el, stop_el, monitor_el;
 
 function init() {
   stream_url_el = document.getElementById('stream_url');
   start_el = document.getElementById('start');
   stop_el = document.getElementById('stop');
-  pause_el = document.getElementById('pause');
-  resume_el = document.getElementById('resume');
   monitor_el = document.getElementById('monitor');
+  stream_url.value = localStorage.getItem('streamana-example-streamurl');
 }
 
 let camera_stream, gl_canvas, canvas_stream, recorder, ffmpeg_hls;
@@ -33,6 +32,7 @@ async function start() {
   if (!stream_url) {
     return;
   }
+  localStorage.setItem('streamana-example-streamurl', stream_url);
 
   start_el.disabled = true;
 
@@ -198,8 +198,6 @@ void main() {
     monitor_el.play();
 
     stop_el.disabled = false;
-    pause_el.disabled = false;
-    resume_el.disabled = true;
   });
 
   // pass the stream from the camera to the video so it can render the frames
@@ -208,8 +206,6 @@ void main() {
 
 function stop() {
   stop_el.disabled = true;
-  pause_el.disabled = true;
-  resume_el.disabled = true;
 
   for (let track of camera_stream.getTracks()) {
     track.stop();
@@ -225,22 +221,6 @@ function stop() {
     type: 'video-ended'
   });
 }
-
-function pause() {
-  for (let track of camera_stream.getTracks()) {
-    track.enabled = false;
-  }
-  pause_el.disabled = true;
-  resume_el.disabled = false;
-}
-
-function resume() {
-  for (let track of camera_stream.getTracks()) {
-    track.enabled = true;
-  }
-  pause_el.disabled = false;
-  resume_el.disabled = true;
-}
 </script>
 </head>
 <body onload="init()">
@@ -248,8 +228,6 @@ function resume() {
   <input id=stream_url type="text" placeholder="Youtube Stream URL">
   <input id=start type="button" value="Start" onclick="start()">
   <input id=stop type="button" value="Stop" disabled onclick="stop()">
-  <input id=pause type="button" value="Pause" disabled onclick="pause()">
-  <input id=resume type="button" value="Resume" disabled onclick="resume()">
 </p>
 <video id="monitor" style="width:100%" muted="true"></video>
 </body>
