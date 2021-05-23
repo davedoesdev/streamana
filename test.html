@@ -1,30 +1,19 @@
 <html>
 <head>
-<script type="text/javascript" src="https://unpkg.com/glsl-canvas-js/dist/umd/glsl-canvas.min.js"></script>
-<script type="text/javascript">
-// Use setInterval instead of requestAnimation frame so video continues
-// even when tab is hidden
-class GlCanvas extends glsl.Canvas {
-  onLoop() {
-    this.checkRender();
-    this.siId = setInterval(() => this.checkRender(), 33);
-  }
-
-  destroy() {
-    clearInterval(this.siId);
+<!-- In production you probably want to use a bundler with resource integrity -->
+<script type="importmap">
+{
+  "imports": {
+    "glsl-canvas-js": "https://unpkg.com/glsl-canvas-js@0.2.6/dist/esm/glsl.js",
+    "promise-polyfill": "https://unpkg.com/promise-polyfill@8.2.0/src/index.js",
+    "gl-matrix": "https://unpkg.com/gl-matrix@3.3.0/esm/index.js"
   }
 }
+</script>
+<script type="module">
+import { InvisibleGlCanvas } from './gl-canvas.js';
 
 let stream_url_el, start_el, stop_el, monitor_el;
-
-function init() {
-  stream_url_el = document.getElementById('stream_url');
-  start_el = document.getElementById('start');
-  stop_el = document.getElementById('stop');
-  monitor_el = document.getElementById('monitor');
-  stream_url.value = localStorage.getItem('streamana-example-streamurl');
-}
-
 let camera_stream, gl_canvas, canvas_stream, recorder, ffmpeg_hls;
 
 async function start() {
@@ -55,31 +44,10 @@ async function start() {
   const video = document.createElement("video");
   video.muted = true;
 
-  // create a canvas for doing webgl
-  const canvas = document.createElement('canvas');
-
   // use glsl-canvas to make managing webgl stuff easier
   // because it's not visible, client dimensions are zero so we
   // need to substitute actual dimensions instead
-  gl_canvas = new GlCanvas(new Proxy(canvas, {
-    get: function (target, name, receiver) {
-      if (name === 'getBoundingClientRect') {
-        return () => new DOMRect(0, 0, target.width, target.height);
-      }
-      if (name === 'clientWidth') {
-        return target.width;
-      }
-      if (name === 'clientHeight') {
-        return target.height;
-      }
-      const r = target[name];
-      return typeof r === 'function' ? r.bind(target) : r;
-    },
-    set: function (target, name, value) {
-      target[name] = value;
-      return true;
-    }
-  }));
+  gl_canvas = new InvisibleGlCanvas(document);
 
   // sample greyscale fragment shader
   const fragmentShader = `
@@ -103,14 +71,14 @@ void main() {
   // registers a loadeddata handler which then registers a play handler)
   video.addEventListener('loadeddata', function () {
     // make canvas same size as native video dimensions so every pixel is seen
-    canvas.width = this.videoWidth;
-    canvas.height = this.videoHeight;
+    gl_canvas.canvas.width = this.videoWidth;
+    gl_canvas.canvas.height = this.videoHeight;
 
     // start the camera video
     this.play();
 
     // capture video from the canvas
-    canvas_stream = canvas.captureStream(30);
+    canvas_stream = gl_canvas.canvas.captureStream(30);
     canvas_stream.addTrack(camera_stream.getAudioTracks()[0]);
 
     // set up video recording from the canvas; note we don't start
@@ -221,13 +189,25 @@ function stop() {
     type: 'video-ended'
   });
 }
+
+window.addEventListener('load', function () {
+  stream_url_el = document.getElementById('stream_url');
+  start_el = document.getElementById('start');
+  stop_el = document.getElementById('stop');
+  monitor_el = document.getElementById('monitor');
+  stream_url.value = localStorage.getItem('streamana-example-streamurl');
+  start_el.disabled = false;
+
+  start_el.addEventListener('click', start);
+  stop_el.addEventListener('click', stop);
+});
 </script>
 </head>
-<body onload="init()">
+<body>
 <p>
   <input id=stream_url type="text" placeholder="Youtube Stream URL">
-  <input id=start type="button" value="Start" onclick="start()">
-  <input id=stop type="button" value="Stop" disabled onclick="stop()">
+  <input id=start type="button" value="Start" disabled>
+  <input id=stop type="button" value="Stop" disabled>
 </p>
 <video id="monitor" style="width:100%" muted="true"></video>
 </body>
