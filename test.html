@@ -1,6 +1,7 @@
 <html>
 <head>
-<!-- In production you probably want to use a bundler with resource integrity -->
+<!-- These import maps enable import of glsl-canvas without a bunder.
+     In production you probably want to use a bundler with resource integrity. -->
 <script type="importmap">
 {
   "imports": {
@@ -12,9 +13,10 @@
 </script>
 <script type="module">
 import { InvisibleGlCanvas } from './gl-canvas.js';
+import { HlsWorker } from './hls-worker.js';
 
 let stream_url_el, start_el, stop_el, monitor_el;
-let camera_stream, gl_canvas, canvas_stream, recorder, ffmpeg_hls;
+let camera_stream, gl_canvas, canvas_stream, recorder, hls_worker;
 
 async function start() {
   const stream_url = stream_url_el.value.trim();
@@ -67,7 +69,7 @@ void main() {
   // tell canvas to use frames from video
   gl_canvas.setTexture('u_texture', video);
 
-  // wait for video to load (must come after gl_canvas.setTexture since it
+  // wait for video to load (must come after gl_canvas.setTexture() since it
   // registers a loadeddata handler which then registers a play handler)
   video.addEventListener('loadeddata', function () {
     // make canvas same size as native video dimensions so every pixel is seen
@@ -91,73 +93,30 @@ void main() {
 
     // push encoded data into the ffmpeg worker that we start below
     recorder.ondataavailable = async function (event) {
-      const data = await event.data.arrayBuffer();
-      ffmpeg_hls.postMessage({
-        type: 'video-data',
-        data: data
-      }, [data]);
+      hls_worker.write(await event.data.arrayBuffer());
     };
 
     // start ffmpeg in a worker
-    ffmpeg_hls = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
-    ffmpeg_hls.onmessage = function (e) {
-      const msg = e.data;
-      switch (msg.type) {
-        case 'ready':
-          this.postMessage({
-            type: 'run',
-            arguments: [
-              '-i', '-', // our worker will simulate stdin
-              '-f', 'hls', // use hls encoder
-              '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-              '-c:a', 'aac',  // re-encode audio as AAC-LC
-              '-b:a', '128k', // set audio bitrate
-              '-hls_time', '2', // 2 second HLS chunks
-              '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
-              '-hls_list_size', '2', // two chunks in the list at a time
-              '/outbound/output.m3u8' // path to media playlist file in virtual FS,
-                                      // must be under /outbound
-            ]
-          });
-          break;
-        case 'run':
-          console.log("RUNNING");
-          break;
-        case 'stdout':
-          console.log(msg.data);
-          break;
-        case 'stderr':
-          console.error(msg.data);
-          break;
-        case 'exit':
-          console.log("EXITED", msg.data);
-          if (recorder.state !== 'inactive') {
-            recorder.stop();
-          }
-          this.terminate();
-          monitor_el.srcObject = null;
-          start_el.disabled = false;
-          break;
-        case 'done':
-          // due to async stdin read, we get this message immediately
-          //console.log("DONE", msg.data);
-          break;
-        case 'error':
-          console.error("ERROR", msg.data);
-          break;
-        case 'abort':
-          console.error("ABORT", msg.data);
-          break;
-        case 'start-video':
-          this.postMessage({
-            type: 'base-url',
-            data: stream_url
-          });
-          // start recording; produce data every second, we'll be chunking it anyway
-          recorder.start(1000);
-          break;
+    hls_worker = new HlsWorker(stream_url);
+    hls_worker.addEventListener('run', () => console.log("HLS running"));
+    hls_worker.addEventListener('exit', ev => {
+      console.log("HLS exited with code", ev.detail);
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
       }
-    };
+      monitor_el.srcObject = null;
+      start_el.disabled = false;
+    });
+    hls_worker.addEventListener('error', ev => {
+      console.error("HLS errored", ev.detail);
+    });
+    hls_worker.addEventListener('abort', ev => {
+      console.error("HLS aborted", ev.detail);
+    });
+    hls_worker.addEventListener('start-video', () => {
+      // start recording; produce data every second, we'll be chunking it anyway
+      recorder.start(1000);
+    });
 
     // display the video locally so we can see what's going on
     // note the video seems to set its height automatically to keep the
@@ -185,9 +144,7 @@ function stop() {
     track.stop();
   }
   
-  ffmpeg_hls.postMessage({
-    type: 'video-ended'
-  });
+  hls_worker.end();
 }
 
 window.addEventListener('load', function () {
