@@ -1,5 +1,6 @@
 <html>
 <head>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
 <!-- These import maps enable import of glsl-canvas without a bunder.
      In production you probably want to use a bundler with resource integrity. -->
 <script type="importmap">
@@ -16,19 +17,24 @@ import { InvisibleGlCanvas } from './gl-canvas.js';
 import { HlsWorker } from './hls-worker.js';
 import shader from './greyscale-shader.js';
 
-let stream_url_el, start_el, stop_el, monitor_el, hls_worker;
+let stream_url_el, go_live_el, monitor_el, waiting_el, hls_worker;
 
 window.addEventListener('load', function () {
-  stream_url_el = document.getElementById('stream_url');
-  start_el = document.getElementById('start');
-  stop_el = document.getElementById('stop');
+  stream_url_el = document.getElementById('stream-url');
+  go_live_el = document.getElementById('go-live');
   monitor_el = document.getElementById('monitor');
+  waiting_el = document.getElementById('waiting');
 
-  stream_url.value = localStorage.getItem('streamana-example-streamurl');
-  start_el.disabled = false;
+  stream_url_el.value = localStorage.getItem('streamana-example-streamurl');
+  go_live_el.disabled = false;
 
-  start_el.addEventListener('click', start);
-  stop_el.addEventListener('click', stop);
+  go_live_el.addEventListener('click', function () {
+    if (this.checked) {
+      start();
+    } else {
+      stop();
+    }
+  });
 });
 
 async function start() {
@@ -38,7 +44,8 @@ async function start() {
   }
   localStorage.setItem('streamana-example-streamurl', stream_url);
 
-  start_el.disabled = true;
+  go_live_el.disabled = true;
+  waiting_el.classList.remove('d-none');
 
   // capture video from webcam
   const camera_stream = await navigator.mediaDevices.getUserMedia({
@@ -56,7 +63,7 @@ async function start() {
   // create video element which will be used for grabbing the frames to
   // write to a canvas so we can apply webgl shaders
   // also used to get the native video dimensions
-  const video = document.createElement("video");
+  const video = document.createElement('video');
   video.muted = true;
 
   // use glsl-canvas to make managing webgl stuff easier
@@ -87,16 +94,16 @@ async function start() {
     // set up video recording from the canvas; note we don't start
     // recording until ffmpeg has started (below)
     const recorder = new MediaRecorder(canvas_stream, {
-      mimeType: "video/webm;codecs=H264",
+      mimeType: 'video/webm;codecs=H264',
       audioBitsPerSecond:  128 * 1000,
       videoBitsPerSecond: 2500 * 1000
     });
 
     // start ffmpeg in a worker
     hls_worker = new HlsWorker(stream_url);
-    hls_worker.addEventListener('run', () => console.log("HLS running"));
+    hls_worker.addEventListener('run', () => console.log('HLS running'));
     hls_worker.addEventListener('exit', ev => {
-      console.log("HLS exited with code", ev.detail);
+      console.log('HLS exited with code', ev.detail);
       for (let track of camera_stream.getTracks()) {
         track.stop();
       }
@@ -108,17 +115,24 @@ async function start() {
         recorder.stop();
       }
       monitor_el.srcObject = null;
-      start_el.disabled = false;
+      go_live_el.disabled = false;
     });
     hls_worker.addEventListener('error', ev => {
-      console.error("HLS errored", ev.detail);
+      console.error('HLS errored', ev.detail);
     });
     hls_worker.addEventListener('abort', ev => {
-      console.error("HLS aborted", ev.detail);
+      console.error('HLS aborted', ev.detail);
     });
     hls_worker.addEventListener('start-video', () => {
       // start recording; produce data every second, we'll be chunking it anyway
       recorder.start(1000);
+
+      // display the video locally so we can see what's going on
+      // note the video seems to set its height automatically to keep the
+      // correct aspect ratio
+      waiting_el.classList.add('d-none');
+      monitor_el.srcObject = canvas_stream;
+      monitor_el.play();
     });
 
     // push encoded data into the ffmpeg worker
@@ -126,13 +140,7 @@ async function start() {
       hls_worker.write(await event.data.arrayBuffer());
     };
 
-    // display the video locally so we can see what's going on
-    // note the video seems to set its height automatically to keep the
-    // correct aspect ratio
-    monitor_el.srcObject = canvas_stream;
-    monitor_el.play();
-
-    stop_el.disabled = false;
+    go_live_el.disabled = false;
   });
 
   // pass the stream from the camera to the video so it can render the frames
@@ -140,17 +148,36 @@ async function start() {
 }
 
 function stop() {
-  stop_el.disabled = true;
+  go_live_el.disabled = true;
   hls_worker.end();
 }
 </script>
 </head>
 <body>
-<p>
-  <input id=stream_url type="text" placeholder="Youtube Stream URL">
-  <input id=start type="button" value="Start" disabled>
-  <input id=stop type="button" value="Stop" disabled>
-</p>
-<video id="monitor" style="width:100%" muted="true"></video>
+<div class="container">
+  <div class="row">
+    <div class="col">
+      <div class="input-group">
+        <input id="stream-url" type="text" class="form-control" placeholder="Youtube Stream URL">
+        <div class="input-group-text">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="go-live" disabled autocomplete="off">
+            <label for="go-live">Go Live</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col position-relative">
+      <video id="monitor" muted="true" class="w-100"></video>
+      <div class="position-absolute top-50 start-50 translate-middle">
+        <div id="waiting" class="text-primary spinner-border d-none" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
