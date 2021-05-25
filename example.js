@@ -6,13 +6,10 @@ let stream_url_el, go_live_el, monitor_el, waiting_el, hls_worker;
 
 window.addEventListener('load', function () {
     stream_url_el = document.getElementById('stream-url');
-    go_live_el = document.getElementById('go-live');
-    monitor_el = document.getElementById('monitor');
-    waiting_el = document.getElementById('waiting');
-
     stream_url_el.value = localStorage.getItem('streamana-example-streamurl');
-    go_live_el.disabled = false;
 
+    go_live_el = document.getElementById('go-live');
+    go_live_el.disabled = false;
     go_live_el.addEventListener('click', function () {
         if (this.checked) {
             start();
@@ -20,6 +17,9 @@ window.addEventListener('load', function () {
             stop();
         }
     });
+
+    monitor_el = document.getElementById('monitor');
+    waiting_el = document.getElementById('waiting');
 });
 
 async function start() {
