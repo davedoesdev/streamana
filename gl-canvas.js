@@ -1,5 +1,6 @@
 // Use glsl-canvas to make managing webgl stuff easier.
-import { Canvas } from 'glsl-canvas-js';
+import importUMD from './import-umd.js';
+const { Canvas } = await importUMD('./glsl-canvas.min.js');
 
 export class InvisibleGlCanvas extends Canvas {
     constructor(document) {
