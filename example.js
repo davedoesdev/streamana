@@ -2,32 +2,30 @@ import { InvisibleGlCanvas } from './gl-canvas.js';
 import { HlsWorker } from './hls-worker.js';
 import shader from './greyscale-shader.js';
 
-let stream_url_el, go_live_el, monitor_el, waiting_el, hls_worker;
+const ingestion_url_el = document.getElementById('ingestion-url');
+ingestion_url_el.value = localStorage.getItem('streamana-example-ingestion-url');
 
-window.addEventListener('load', function () {
-    stream_url_el = document.getElementById('stream-url');
-    stream_url_el.value = localStorage.getItem('streamana-example-streamurl');
-
-    go_live_el = document.getElementById('go-live');
-    go_live_el.disabled = false;
-    go_live_el.addEventListener('click', function () {
-        if (this.checked) {
-            start();
-        } else {
-            stop();
-        }
-    });
-
-    monitor_el = document.getElementById('monitor');
-    waiting_el = document.getElementById('waiting');
+const go_live_el = document.getElementById('go-live');
+go_live_el.disabled = false;
+go_live_el.addEventListener('click', function () {
+    if (this.checked) {
+        start();
+    } else {
+        stop();
+    }
 });
 
+const monitor_el = document.getElementById('monitor');
+const waiting_el = document.getElementById('waiting');
+
+let hls_worker;
+
 async function start() {
-    const stream_url = stream_url_el.value.trim();
-    if (!stream_url) {
+    const ingestion_url = ingestion_url_el.value.trim();
+    if (!ingestion_url) {
         return;
     }
-    localStorage.setItem('streamana-example-streamurl', stream_url);
+    localStorage.setItem('streamana-example-ingestion-url', ingestion_url);
 
     go_live_el.disabled = true;
     waiting_el.classList.remove('d-none');
@@ -76,16 +74,8 @@ async function start() {
         const canvas_stream = gl_canvas.canvas.captureStream(30);
         canvas_stream.addTrack(camera_stream.getAudioTracks()[0]);
 
-        // set up video recording from the canvas; note we don't start
-        // recording until ffmpeg has started (below)
-        const recorder = new MediaRecorder(canvas_stream, {
-            mimeType: 'video/webm;codecs=H264',
-            audioBitsPerSecond:  128 * 1000,
-            videoBitsPerSecond: 2500 * 1000
-        });
-
-        // start ffmpeg in a worker
-        hls_worker = new HlsWorker(stream_url);
+        // start HLS from the canvas stream to the ingestion URL
+        hls_worker = new HlsWorker(canvas_stream, ingestion_url);
         hls_worker.addEventListener('run', () => console.log('HLS running'));
         hls_worker.addEventListener('exit', ev => {
             console.log('HLS exited with code', ev.detail);
@@ -95,9 +85,6 @@ async function start() {
             gl_canvas.destroy();
             for (let track of canvas_stream.getTracks()) {
                 track.stop();
-            }
-            if (recorder.state !== 'inactive') {
-                recorder.stop();
             }
             monitor_el.srcObject = null;
             go_live_el.disabled = false;
@@ -109,9 +96,6 @@ async function start() {
             console.error('HLS aborted', ev.detail);
         });
         hls_worker.addEventListener('start-video', () => {
-            // start recording; produce data every second, we'll be chunking it anyway
-            recorder.start(1000);
-
             // display the video locally so we can see what's going on
             // note the video seems to set its height automatically to keep the
             // correct aspect ratio
@@ -119,11 +103,6 @@ async function start() {
             monitor_el.srcObject = canvas_stream;
             monitor_el.play();
         });
-
-        // push encoded data into the ffmpeg worker
-        recorder.ondataavailable = async function (event) {
-            hls_worker.write(await event.data.arrayBuffer());
-        };
 
         go_live_el.disabled = false;
     });

@@ -1,6 +1,24 @@
 export class HlsWorker extends EventTarget {
-    constructor(stream_url) {
+    constructor(stream, ingestion_url) {
         super();
+        // set up video recording from the stream
+        // note we don't start recording until ffmpeg has started (below)
+        const recorder = new MediaRecorder(stream, {
+            mimeType: 'video/webm;codecs=H264',
+            audioBitsPerSecond:  128 * 1000,
+            videoBitsPerSecond: 2500 * 1000
+        });
+
+        // push encoded data into the ffmpeg worker
+        recorder.ondataavailable = async event => {
+            const data = await event.data.arrayBuffer();
+            this.worker.postMessage({
+                type: 'video-data',
+                data
+            }, [data]);
+        };
+
+        // start ffmpeg in a Web Worker
         this.worker = new Worker('ffmpeg.js/ffmpeg-worker-hls.js');
         this.worker.onmessage = e => {
             const msg = e.data;
@@ -31,22 +49,20 @@ export class HlsWorker extends EventTarget {
                 case 'start-video':
                     this.worker.postMessage({
                         type: 'base-url',
-                        data: stream_url
+                        data: ingestion_url
                     });
+                    // start recording; produce data every second, we'll be chunking it anyway
+                    recorder.start(1000);
                     break;
                 case 'exit':
                     this.worker.terminate();
+                    if (recorder.state !== 'inactive') {
+                        recorder.stop();
+                    }
                     break;
             }
             this.dispatchEvent(new CustomEvent(msg.type, { detail: msg.data }));
         };
-    }
-
-    write(data) {
-        this.worker.postMessage({
-            type: 'video-data',
-            data
-        }, [data]);
     }
 
     end() {
