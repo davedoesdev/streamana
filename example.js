@@ -23,6 +23,7 @@ let hls_worker;
 async function start() {
     const ingestion_url = ingestion_url_el.value.trim();
     if (!ingestion_url) {
+        go_live_el.checked = false;
         return;
     }
     localStorage.setItem('streamana-example-ingestion-url', ingestion_url);
