@@ -1,0 +1,43 @@
+<html>
+  <head>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+    <script type="module" src="./example.js"></script>
+  </head>
+  <body>
+    <nav id="nav" class="navbar navbar-light bg-light">
+      <div class="container-fluid">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarToggleExternalContent">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <span class="d-flex" style="flex: 1">
+          <input id="ingestion-url" type="text" class="form-control ms-2 me-2" placeholder="Ingestion URL">
+          <div class="input-group-text">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="go-live" disabled autocomplete="off">
+              <label for="go-live">Go Live</label>
+            </div>
+          </div>
+        </span>
+      </div>
+    </nav>
+    <div class="collapse" id="navbarToggleExternalContent">
+      <div class="input-group-text">
+        <label for="ffmpeg-lib-url">FFmpeg library URL:</label>
+        <input id="ffmpeg-lib-url" class="form-control ms-2" placeholder="ffmpeg-worker-hls.js" type="text">
+      </div>
+    </div>
+    <div id="error-alert" class="alert alert-danger alert-dismissible fade mb-0" role="alert">
+      <strong>An error occurred!</strong> See the Developer Console for details.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="position-relative">
+      <video id="monitor" muted="true" class="w-100"></video>
+      <div class="position-absolute top-50 start-50 translate-middle">
+        <div id="waiting" class="text-primary spinner-border d-none" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
