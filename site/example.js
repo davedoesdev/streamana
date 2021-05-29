@@ -1,4 +1,5 @@
-import { InvisibleGlCanvas } from './gl-canvas.js';
+//import { InvisibleGlCanvas } from './gl-canvas.js';
+import { safari_hack_InvisibleGlCanvas } from './gl-canvas.js';
 import { HlsWorker } from './hls-worker.js';
 import shader from './greyscale-shader.js';
 
@@ -101,7 +102,8 @@ async function start() {
         // use glsl-canvas to make managing webgl stuff easier
         // because it's not visible, client dimensions are zero so we
         // need to substitute actual dimensions instead
-        gl_canvas = new InvisibleGlCanvas(document);
+        //gl_canvas = new InvisibleGlCanvas(document);
+        gl_canvas = new (await safari_hack_InvisibleGlCanvas())(document);
 
         // as an example, greyscale the stream
         gl_canvas.load(shader);
@@ -133,7 +135,6 @@ async function start() {
                         console.log(msg);
                         cleanup();
                     } else {
-                        console.error(msg);
                         cleanup(msg);
                     }
                 });

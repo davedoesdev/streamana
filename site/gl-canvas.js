@@ -1,8 +1,11 @@
 // Use glsl-canvas to make managing webgl stuff easier.
 import importUMD from './import-umd.js';
+//const { Canvas } = await importUMD('./glsl-canvas.min.js');
+export async function safari_hack_InvisibleGlCanvas() {
+
 const { Canvas } = await importUMD('./glsl-canvas.min.js');
 
-export class InvisibleGlCanvas extends Canvas {
+/*export*/ class InvisibleGlCanvas extends Canvas {
     constructor(document) {
         // Create a canvas for doing webgl
         const canvas = document.createElement('canvas');
@@ -41,4 +44,6 @@ export class InvisibleGlCanvas extends Canvas {
         super.destroy();
     }
 }
+
+return InvisibleGlCanvas; }
 

@@ -1,3 +1,6 @@
+const audioBitsPerSecond = 128 * 1000;
+const videoBitsPerSecond = 2500 * 1000;
+
 export class HlsWorker extends EventTarget {
     constructor(stream, ingestion_url, ffmpeg_lib_url) {
         super();
@@ -11,11 +14,22 @@ export class HlsWorker extends EventTarget {
 
         // set up video recording from the stream
         // note we don't start recording until ffmpeg has started (below)
-        const recorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=H264',
-            audioBitsPerSecond:  128 * 1000,
-            videoBitsPerSecond: 2500 * 1000
-        });
+        let recorder;
+        try {
+            recorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=H264',
+                audioBitsPerSecond,
+                videoBitsPerSecond
+            });
+        } catch (ex) {
+            // on Safari only MP4 is available, assume ffmpeg.js has been configured for it
+            console.warn('Failed to record WebM, falling back to MP4');
+            recorder = new MediaRecorder(stream, {
+                mimeType: 'video/mp4',
+                audioBitsPerSecond,
+                videoBitsPerSecond
+            });
+        }
         recorder.onerror = onerror;
 
         // push encoded data into the ffmpeg worker
