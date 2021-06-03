@@ -12,6 +12,15 @@ export class HlsWorker extends EventTarget {
             }
         };
 
+        // we should use VideoEncoder and AudioEncoder
+        // push data into worker, we'll need to be able to handle separate streams
+        // have a /inbound and async read from 2 files on there via queues
+        // - fd 3 and 4 should be
+        // start by implementing this for current system
+        // chrome supports mp4a.40.2  (AAC LC) and  avc1.42001E (H264)
+        // so we can passthru both and don't need any codecs hopefully
+        //console.log(stream.getVideoTracks()[0].width, stream.getVideoTracks()[1].height);
+
         // set up video recording from the stream
         // note we don't start recording until ffmpeg has started (below)
         let recorder;

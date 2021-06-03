@@ -81,17 +81,27 @@ async function start() {
 
     try {
         // capture video from webcam
-        camera_stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: {
-                width: 4096,
-                height: 2160,
-                frameRate: {
-                    ideal: 30,
-                    max: 30
-                }
+        const video_constraints = {
+            width: 4096,
+            height: 2160,
+            frameRate: {
+                ideal: 30,
+                max: 30
             }
-        });
+        };
+        try {
+            camera_stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: video_constraints
+            });
+        } catch (ex) {
+            // retry in case audio isn't available
+            console.warn("Failed to get user media, retrying without audio");
+            camera_stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: video_constraints
+            });
+        }
 
         // create video element which will be used for grabbing the frames to
         // write to a canvas so we can apply webgl shaders
@@ -124,7 +134,20 @@ async function start() {
 
                 // capture video from the canvas
                 canvas_stream = gl_canvas.canvas.captureStream(30);
-                canvas_stream.addTrack(camera_stream.getAudioTracks()[0]);
+
+                // add audio if present
+                let audio_tracks = camera_stream.getAudioTracks();
+                if (audio_tracks.length === 0) {
+                    // if audio isn't present, use silence
+                    console.warn("No audio present, adding silence");
+                    const context = new AudioContext();
+                    const silence = context.createBufferSource();
+                    const dest = context.createMediaStreamDestination();
+                    silence.connect(dest);
+                    silence.start();
+                    audio_tracks = dest.stream.getAudioTracks();
+                }
+                canvas_stream.addTrack(audio_tracks[0]);
 
                 // start HLS from the canvas stream to the ingestion URL
                 hls_worker = new HlsWorker(canvas_stream, ingestion_url, ffmpeg_lib_url);
