@@ -12,6 +12,32 @@ export class HlsWorker extends EventTarget {
             }
         };
 
+        // if audio isn't present, add a silent track
+        if (stream.getAudioTracks().length === 0) {
+            console.warn("No audio present, adding silence");
+            const context = new AudioContext({
+                sampleRate: audioBitsPerSecond
+            });
+            // Note: createBufferSource is supposed to be used
+            // to create silence but it doesn't keep the page active
+            // if it's hidden. Use createConstantSource instead.
+            // Since this is a constant value, it won't generate
+            // something that changes (such as a sine or sawtooth
+            // waveform) and so is inaudible. This passes the
+            // browser's silence detection, which must just check
+            // for zero values.
+            // Note: WebAudio destination stream output is bugged
+            // on Safari:
+            // https://bugs.webkit.org/show_bug.cgi?id=173863
+            // https://bugs.webkit.org/show_bug.cgi?id=198284
+            //const silence = context.createBufferSource();
+            const silence = context.createConstantSource();
+            const dest = context.createMediaStreamDestination();
+            silence.connect(dest);
+            silence.start();
+            stream.addTrack(dest.stream.getAudioTracks()[0]);
+        }
+
         // we should use VideoEncoder and AudioEncoder
         // push data into worker, we'll need to be able to handle separate streams
         // have a /inbound and async read from 2 files on there via queues

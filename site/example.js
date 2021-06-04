@@ -136,18 +136,10 @@ async function start() {
                 canvas_stream = gl_canvas.canvas.captureStream(30);
 
                 // add audio if present
-                let audio_tracks = camera_stream.getAudioTracks();
-                if (audio_tracks.length === 0) {
-                    // if audio isn't present, use silence
-                    console.warn("No audio present, adding silence");
-                    const context = new AudioContext();
-                    const silence = context.createBufferSource();
-                    const dest = context.createMediaStreamDestination();
-                    silence.connect(dest);
-                    silence.start();
-                    audio_tracks = dest.stream.getAudioTracks();
+                const audio_tracks = camera_stream.getAudioTracks();
+                if (audio_tracks.length > 0) {
+                    canvas_stream.addTrack(audio_tracks[0]);
                 }
-                canvas_stream.addTrack(audio_tracks[0]);
 
                 // start HLS from the canvas stream to the ingestion URL
                 hls_worker = new HlsWorker(canvas_stream, ingestion_url, ffmpeg_lib_url);
