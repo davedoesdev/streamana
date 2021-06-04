@@ -44,6 +44,7 @@ async function start() {
 
     go_live_el.disabled = true;
     waiting_el.classList.remove('d-none');
+    monitor_el.classList.add('d-none');
 
     if (error_alert_el.parentNode) {
         error_alert_el_parent.removeChild(error_alert_el);
@@ -77,13 +78,30 @@ async function start() {
         go_live_el.checked = false;
         go_live_el.disabled = false;
         waiting_el.classList.add('d-none');
+        monitor_el.classList.add('d-none');
     }
 
     try {
+        // create video element which will be used for grabbing the frames to
+        // write to a canvas so we can apply webgl shaders
+        // also used to get the native video dimensions
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+
+        // Safari on iOS requires us to play() in the click handler and doesn't
+        // track async calls. So we play a blank video first. After that, the video
+        // element is blessed for script-driver playback.
+        video.src = 'empty.mp4';
+        monitor_el.src = 'empty.mp4';
+        await Promise.all([video.play(), monitor_el.play()]);
+
         // capture video from webcam
         const video_constraints = {
-            width: 4096,
-            height: 2160,
+            //width: 4096,
+            //height: 2160,
+            width: 1280,
+            height: 720,
             frameRate: {
                 ideal: 30,
                 max: 30
@@ -102,12 +120,6 @@ async function start() {
                 video: video_constraints
             });
         }
-
-        // create video element which will be used for grabbing the frames to
-        // write to a canvas so we can apply webgl shaders
-        // also used to get the native video dimensions
-        const video = document.createElement('video');
-        video.muted = true;
 
         // use glsl-canvas to make managing webgl stuff easier
         // because it's not visible, client dimensions are zero so we
@@ -162,6 +174,7 @@ async function start() {
                     waiting_el.classList.add('d-none');
                     monitor_el.srcObject = canvas_stream;
                     monitor_el.play();
+                    monitor_el.classList.remove('d-none');
                 });
 
                 go_live_el.disabled = false;

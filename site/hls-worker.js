@@ -89,8 +89,10 @@ export class HlsWorker extends EventTarget {
                             '-i', '-', // our worker will simulate stdin
                             '-f', 'hls', // use hls encoder
                             '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                            '-c:a', 'aac',  // re-encode audio as AAC-LC
-                            '-b:a', '128k', // set audio bitrate
+                            ...(recorder.mimeType === 'video/mp4' ?
+                                ['-c:a', 'copy'] : // assume already AAC
+                                ['-c:a', 'aac',  // re-encode audio as AAC-LC
+                                 '-b:a', '128k']), // set audio bitrate
                             '-hls_time', '2', // 2 second HLS chunks
                             '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
                             '-hls_list_size', '2', // two chunks in the list at a time
