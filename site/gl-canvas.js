@@ -40,8 +40,14 @@ const { Canvas } = await importUMD('./glsl-canvas.min.js');
         this.siId = setInterval(() => this.checkRender(), 33);
     }
     destroy() {
-        clearInterval(this.siId);
         super.destroy();
+        this.uniforms = {
+            createTexture() {
+                return {};
+            },
+            create() {}
+        };
+        clearInterval(this.siId);
     }
 }
 
