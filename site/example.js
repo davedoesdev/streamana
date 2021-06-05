@@ -145,6 +145,8 @@ async function start() {
                 this.play();
 
                 // capture video from the canvas
+                // Note: Safari on iOS doesn't get any data, might be related to
+                // https://bugs.webkit.org/show_bug.cgi?id=181663
                 canvas_stream = gl_canvas.canvas.captureStream(30);
 
                 // add audio if present
