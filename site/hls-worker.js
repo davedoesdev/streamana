@@ -72,6 +72,7 @@ export class HlsWorker extends EventTarget {
             const data = await event.data.arrayBuffer();
             this.worker.postMessage({
                 type: 'video-data',
+                name: 'stream1',
                 data
             }, [data]);
         };
@@ -86,7 +87,7 @@ export class HlsWorker extends EventTarget {
                     this.worker.postMessage({
                         type: 'run',
                         arguments: [
-                            '-i', '-', // our worker will simulate stdin
+                            '-i', '/work/stream1', // fd 3 in worker
                             '-f', 'hls', // use hls encoder
                             '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
                             ...(recorder.mimeType === 'video/mp4' ?
@@ -98,6 +99,10 @@ export class HlsWorker extends EventTarget {
                             '-hls_list_size', '2', // two chunks in the list at a time
                             '/outbound/output.m3u8' // path to media playlist file in virtual FS,
                                                     // must be under /outbound
+                        ],
+                        MEMFS: [
+                            { name: 'stream1' },
+                            { name: 'stream2' }
                         ]
                     });
                     break;
