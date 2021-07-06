@@ -1,43 +1,40 @@
 // Use glsl-canvas to make managing webgl stuff easier.
 import importUMD from './import-umd.js';
-//const { Canvas } = await importUMD('./glsl-canvas.min.js');
-export async function safari_hack_InvisibleGlCanvas() {
-
 const { Canvas } = await importUMD('./glsl-canvas.min.js');
 
-/*export*/ class InvisibleGlCanvas extends Canvas {
-    constructor(document) {
-        // Create a canvas for doing webgl
-        const canvas = document.createElement('canvas');
-
-        // Because it won't be visible, client dimensions are zero so we
-        // need to substitute actual dimensions instead.
-        super(new Proxy(canvas, {
-            get: function (target, name, receiver) {
-              if (name === 'getBoundingClientRect') {
-                return () => new DOMRect(0, 0, target.width, target.height);
-              }
-              if (name === 'clientWidth') {
-                return target.width;
-              }
-              if (name === 'clientHeight') {
-                return target.height;
-              }
-              const r = target[name];
-              return typeof r === 'function' ? r.bind(target) : r;
+export class GlCanvas extends Canvas {
+    constructor(canvas_el) {
+        super(new Proxy(canvas_el, {
+            get: (target, name, receiver) => {
+                if (name === 'getBoundingClientRect') {
+                  return () => new DOMRect(0, 0, target.width, target.height);
+                }
+                if (name === 'clientWidth') {
+                  return Math.ceil(target.width / this.devicePixelRatio);
+                }
+                if (name === 'clientHeight') {
+                  return Math.ceil(target.height / this.devicePixelRatio);
+                }
+                const r = target[name];
+                return typeof r === 'function' ? r.bind(target) : r;
             },
-            set: function (target, name, value) {
-              target[name] = value;
-              return true;
+            set: (target, name, value) => {
+                if ((name !== 'width') && (name !== 'height')) {
+                    target[name] = value;
+                }
+                return true;
             }
         }));
+        this.last_render = 0;
     }
-
-    // Use setInterval instead of requestAnimation frame so video continues
-    // even when tab is hidden
+    // Allow rendering loop to be driver externally (e.g. by the audio encoder)
+    // to avoid requestAnimationFrame (or indeed setInterval) throttling.
     onLoop() {
-        this.checkRender();
-        this.siId = setInterval(() => this.checkRender(), 33);
+        const now = Date.now();
+        if ((now - this.last_render) >= 20 /*33*/) {
+            this.checkRender();
+            this.last_render = now;
+        }
     }
     destroy() {
         super.destroy();
@@ -47,9 +44,6 @@ const { Canvas } = await importUMD('./glsl-canvas.min.js');
             },
             create() {}
         };
-        clearInterval(this.siId);
+        this.textures = {};
     }
 }
-
-return InvisibleGlCanvas; }
-
