@@ -83,7 +83,7 @@ export class HLS extends EventTarget {
             if (this.worker) {
                 const data = await event.data.arrayBuffer();
                 this.worker.postMessage({
-                    type: 'stream-data',
+                    type: 'muxed-data',
                     name: 'stream1',
                     data
                 }, [data]);
