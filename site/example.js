@@ -141,7 +141,7 @@ async function start() {
 
         // wait for video to load (must come after gl_canvas.setTexture() since it
         // registers a loadeddata handler which then registers a play handler)
-        video_el.addEventListener('loadeddata', function () {
+        video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
                 canvas_el.width = this.videoWidth;
@@ -167,7 +167,7 @@ async function start() {
                 hls.addEventListener('run', () => console.log('HLS running'));
                 hls.addEventListener('exit', ev => {
                     const msg = `HLS exited with status ${ev.detail.code}`;
-                    if (ev.code === 0) {
+                    if (ev.detail.code === 0) {
                         console.log(msg);
                         cleanup();
                     } else {
@@ -184,7 +184,7 @@ async function start() {
                 hls.addEventListener('update', () => {
                     gl_canvas.onLoop();
                 });
-                hls.start();
+                await hls.start();
             } catch (ex) {
                 cleanup(ex);
             }

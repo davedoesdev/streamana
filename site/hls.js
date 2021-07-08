@@ -1,9 +1,3 @@
-        // TODO if an error occurs after starting worker do we always close/terminate it?
-            // it seems to keep running
-            // but we still get to terminate it because Go Live button remains on
-            // ONLY if error occurs in promise
-        // if only one stream, switch back to stdin only?
-
 import { UpdateLimiter } from './update-limiter.js';
 
 const audioBitsPerSecond = 128 * 1000;
@@ -54,7 +48,7 @@ export class HLS extends EventTarget {
             try {
                 this.webcodecs('avc1.42E01E' /*'avc1.42001E'*/,
                                'opus' /*'pcm'*/,
-                               /* { avc: { format: 'annexb' } } */);
+                               { avc: { format: 'annexb' } });
                 console.log("Using WebCodecs");
             } catch (ex) {
                 console.warn(ex);
@@ -171,7 +165,7 @@ export class HLS extends EventTarget {
 
                 case 'audio-data':
                     if (update_limiter.check()) {
-                        this.dispatchEvent(update_event);
+                        this.dispatchEvent(this.update_event);
                     }
                     // falls through
 
@@ -193,7 +187,7 @@ export class HLS extends EventTarget {
         this.worker.onerror = onerror;
         this.worker.onmessage = e => {
             const msg = e.data;
-            switch (msgtype) {
+            switch (msg.type) {
                 case 'start-stream':
                     video_worker.postMessage({
                         type: 'start',
