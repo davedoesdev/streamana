@@ -153,7 +153,8 @@ async function start() {
                 // capture video from the canvas
                 // Note: Safari on iOS doesn't get any data, might be related to
                 // https://bugs.webkit.org/show_bug.cgi?id=181663
-                canvas_stream = canvas_el.captureStream(30);
+                canvas_stream = canvas_el.captureStream(
+                    camera_stream.getVideoTracks()[0].getSettings().frameRate);
 
                 // add audio if present
                 const audio_tracks = camera_stream.getAudioTracks();
@@ -165,7 +166,7 @@ async function start() {
                 hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url);
                 hls.addEventListener('run', () => console.log('HLS running'));
                 hls.addEventListener('exit', ev => {
-                    const msg = `HLS exited with status ${ev.code}`;
+                    const msg = `HLS exited with status ${ev.detail.code}`;
                     if (ev.code === 0) {
                         console.log(msg);
                         cleanup();
@@ -178,6 +179,7 @@ async function start() {
                     waiting_el.classList.add('d-none');
                     canvas_el.classList.remove('invisible');
                     go_live_el.disabled = false;
+                    gl_canvas.onLoop();
                 });
                 hls.addEventListener('update', () => {
                     gl_canvas.onLoop();

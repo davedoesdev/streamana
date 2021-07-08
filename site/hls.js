@@ -4,6 +4,8 @@
             // ONLY if error occurs in promise
         // if only one stream, switch back to stdin only?
 
+import { UpdateLimiter } from './update-limiter.js';
+
 const audioBitsPerSecond = 128 * 1000;
 const videoBitsPerSecond = 2500 * 1000;
 const key_frame_interval = 10;
@@ -14,15 +16,14 @@ export class HLS extends EventTarget {
         this.stream = stream;
         this.base_url = base_url;
         this.ffmpeg_lib_url = ffmpeg_lib_url;
+        this.update_event = new CustomEvent('update');
     }
 
-    start() {
+    async start() {
         // if audio isn't present, add a silent track
         if (this.stream.getAudioTracks().length === 0) {
             console.warn("No audio present, adding silence");
-            const context = new AudioContext({
-                sampleRate: audioBitsPerSecond
-            });
+            const context = new AudioContext();
             // Note: createBufferSource is supposed to be used
             // to create silence but it doesn't keep the page active
             // if it's hidden. Use createConstantSource instead.
@@ -45,28 +46,33 @@ export class HLS extends EventTarget {
 
         try {
             // first try WebM/H264 MediaRecorder - this should work on Chrome Linux and Windows
-            this.media_recorder('video/webm;codecs=H264');
+            await this.media_recorder('video/webm;codecs=H264');
+            console.log("Using MediaRecorder WebM/h264");
         } catch (ex) {
+            console.warn(ex);
             // next try WebCodecs - this should work on Chrome Android
             try {
                 this.webcodecs('avc1.42E01E' /*'avc1.42001E'*/,
                                'opus' /*'pcm'*/,
                                /* { avc: { format: 'annexb' } } */);
+                console.log("Using WebCodecs");
             } catch (ex) {
+                console.warn(ex);
                 // finally try MP4 - this should work on Safari MacOS and iOS, producing H264
                 // this assumes ffmpeg.js has been configured with MP4 support
-                this.media_recorder('video/mp4');
+                await this.media_recorder('video/mp4');
+                console.log("Using MediaRecorder MP4");
             }
         }
     }
 
-    media_recorder(mimeType) {
+    async media_recorder(mimeType) {
         const onerror = this.onerror.bind(this);
 
         // set up video recording from the stream
         // note we don't start recording until ffmpeg has started (below)
         const recorder = new MediaRecorder(this.stream, {
-            mimeType
+            mimeType,
             audioBitsPerSecond,
             videoBitsPerSecond
         });
@@ -74,14 +80,26 @@ export class HLS extends EventTarget {
 
         // push encoded data into the ffmpeg worker
         recorder.ondataavailable = async event => {
-            const data = await event.data.arrayBuffer();
-            this.worker.postMessage({
-                type: 'stream-data',
-                name: 'stream1',
-                data
-            }, [data]);
-            this.dispatchEvent(new CustomEvent('update'));
+            if (this.worker) {
+                const data = await event.data.arrayBuffer();
+                this.worker.postMessage({
+                    type: 'stream-data',
+                    name: 'stream1',
+                    data
+                }, [data]);
+            }
         };
+
+        // use a persistent audio generator to trigger updates to avoid setInterval throttling
+        const context = new AudioContext();
+        await context.audioWorklet.addModule('./dummy-worklet.js');
+        const dummy_processor = new AudioWorkletNode(context, 'dummy-processor', {
+            processorOptions: {
+                update_rate: this.stream.getVideoTracks()[0].getSettings().frameRate
+            }
+        });
+        dummy_processor.port.onmessage = () => this.dispatchEvent(this.update_event);
+        dummy_processor.connect(context.destination);
 
         // start the ffmpeg worker
         this.worker = new Worker('./hls-worker.js');
@@ -94,16 +112,16 @@ export class HLS extends EventTarget {
                         type: 'start',
                         ffmpeg_lib_url: this.ffmpeg_lib_url,
                         base_url: this.base_url,
-                        ffmpeg_args: {
+                        ffmpeg_args: [
                             '-i', '/work/stream1',
                             '-map', '0:v',
                             '-map', '0:a',
                             '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                            (recorder.mimeType === 'video/mp4' ?
+                            ...(recorder.mimeType === 'video/mp4' ?
                                 ['-c:a', 'copy'] : // assume already AAC
                                 ['-c:a', 'aac',  // re-encode audio as AAC-LC
                                  '-b:a', audioBitsPerSecond.toString()]) // set audio bitrate
-                        }
+                        ]
                     });
                     break;
 
@@ -123,7 +141,9 @@ export class HLS extends EventTarget {
                     if (recorder.state !== 'inactive') {
                         recorder.stop();
                     }
-                    this.dispatchEvent(new CustomEvent(msg.type, { code: msg.code }));
+                    dummy_processor.port.postMessage({ type: 'stop' });
+                    dummy_processor.disconnect();
+                    this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
         };
@@ -140,14 +160,26 @@ export class HLS extends EventTarget {
         const audio_readable = (new MediaStreamTrackProcessor(audio_track)).readable;
         const audio_settings = audio_track.getSettings();
 
-        function relay_data(ev) {
+        const update_limiter = new UpdateLimiter(video_settings.frameRate);
+
+        const relay_data = ev => {
             const msg = ev.data;
-            if (msg.type === 'error') {
-                onerror(msg.detail);
-            } else {
-                this.worker.postMessage(msg, [msg.data]);
+            switch (msg.type) {
+                case 'error':
+                    onerror(msg.detail);
+                    break;
+
+                case 'audio-data':
+                    if (update_limiter.check()) {
+                        this.dispatchEvent(update_event);
+                    }
+                    // falls through
+
+                case 'video-data':
+                    this.worker.postMessage(msg, [msg.data]);
+                    break;
             }
-        }
+        };
 
         const video_worker = new Worker('./encoder-worker.js');
         video_worker.onerror = onerror;
@@ -201,7 +233,7 @@ export class HLS extends EventTarget {
                     this.worker = null;
                     video_worker.terminate();
                     audio_worker.terminate();
-                    this.dispatchEvent(new CustomEvent(msg.type, { code: msg.code }));
+                    this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
         };
@@ -221,19 +253,19 @@ export class HLS extends EventTarget {
                     channels: audio_settings.channelCount,
                     codec_id: 'A_OPUS'
                 }
-            }
+            },
             webm_destination: './hls-worker.js',
             muxed_metadata: { name: 'stream1' },
             ffmpeg_lib_url: this.ffmpeg_lib_url,
             base_url: this.base_url,
-            ffmpeg_args: {
+            ffmpeg_args: [
                 '-i', '/work/stream1',
                 '-map', '0:v',
                 '-map', '0:a',
                 '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
                 '-c:a', 'aac',  // re-encode audio as AAC-LC
                 '-b:a', audioBitsPerSecond.toString() // set audio bitrate
-            }
+            ]
         });
     }
 

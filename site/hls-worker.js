@@ -7,7 +7,7 @@ function onerror(e) {
         console.error(e);
         self.postMessage({
             type: 'error',
-            detail: e
+            detail: e.message
         });
     }
 }
@@ -73,7 +73,8 @@ onmessage = function (e) {
                 if (msg.force) {
                     ffmpeg_worker.terminate();
                     self.postMessage({
-                        type: 'exit'
+                        type: 'exit',
+                        code: 'force-end'
                     });
                 } else {
                     ffmpeg_worker.postMessage({

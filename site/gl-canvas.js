@@ -25,17 +25,13 @@ export class GlCanvas extends Canvas {
                 return true;
             }
         }));
-        this.last_render = 0;
     }
-    // Allow rendering loop to be driver externally (e.g. by the audio encoder)
+    // Allow rendering loop to be driven externally (e.g. by the audio encoder)
     // to avoid requestAnimationFrame (or indeed setInterval) throttling.
     onLoop() {
-        const now = Date.now();
-        if ((now - this.last_render) >= 20 /*33*/) {
-            this.checkRender();
-            this.last_render = now;
-        }
+        this.checkRender();
     }
+    // Prevent errors after destruction
     destroy() {
         super.destroy();
         this.uniforms = {
