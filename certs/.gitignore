@@ -1,0 +1,5 @@
+*
+!make_ca_cert.sh
+!make_server_cert.sh
+!extensions
+!.gitignore
