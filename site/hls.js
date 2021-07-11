@@ -1,4 +1,5 @@
 import { UpdateLimiter } from './update-limiter.js';
+import { WebMDestination } from './webm-destination.js';
 
 const audioBitsPerSecond = 128 * 1000;
 const videoBitsPerSecond = 2500 * 1000;
@@ -74,13 +75,9 @@ export class HLS extends EventTarget {
 
         // push encoded data into the ffmpeg worker
         recorder.ondataavailable = async event => {
-            if (this.worker) {
-                const data = await event.data.arrayBuffer();
-                this.worker.postMessage({
-                    type: 'muxed-data',
-                    name: 'stream1',
-                    data
-                }, [data]);
+            if (this.destination) {
+                this.destination.muxed_data(await event.data.arrayBuffer(),
+                                            { name: 'stream1' });
             }
         };
 
@@ -96,16 +93,13 @@ export class HLS extends EventTarget {
         dummy_processor.connect(context.destination);
 
         // start the ffmpeg worker
-        this.worker = new Worker('./hls-worker.js');
-        this.worker.onerror = onerror;
-        this.worker.onmessage = e => {
-            const msg = e.data;
+        this.destination = new WebMDestination();
+        this.destination.addEventListener('message', e => {
+            const msg = e.detail;
             switch (msg.type) {
                 case 'ready':
-                    this.worker.postMessage({
-                        type: 'start',
+                    this.destination.start({
                         ffmpeg_lib_url: this.ffmpeg_lib_url,
-                        base_url: this.base_url,
                         ffmpeg_args: [
                             '-i', '/work/stream1',
                             '-map', '0:v',
@@ -115,7 +109,8 @@ export class HLS extends EventTarget {
                                 ['-c:a', 'copy'] : // assume already AAC
                                 ['-c:a', 'aac',  // re-encode audio as AAC-LC
                                  '-b:a', audioBitsPerSecond.toString()]) // set audio bitrate
-                        ]
+                        ],
+                        base_url: this.base_url
                     });
                     break;
 
@@ -130,8 +125,7 @@ export class HLS extends EventTarget {
                     break;
 
                 case 'exit':
-                    this.worker.terminate();
-                    this.worker = null;
+                    this.destination = null;
                     if (recorder.state !== 'inactive') {
                         recorder.stop();
                     }
@@ -140,7 +134,7 @@ export class HLS extends EventTarget {
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
-        };
+        });
     }
 
     webcodecs(video_codec, audio_codec, video_config, audio_config) {
@@ -248,7 +242,7 @@ export class HLS extends EventTarget {
                     codec_id: 'A_OPUS'
                 }
             },
-            webm_destination: './hls-worker.js',
+            webm_destination: './webm-destination.js',
             muxed_metadata: { name: 'stream1' },
             ffmpeg_lib_url: this.ffmpeg_lib_url,
             base_url: this.base_url,
@@ -264,7 +258,9 @@ export class HLS extends EventTarget {
     }
 
     end(force) {
-        if (this.worker) {
+        if (this.destination) {
+            this.destination.end({ force });
+        } else if (this.worker) {
             this.worker.postMessage({
                 type: 'end',
                 force
@@ -273,7 +269,7 @@ export class HLS extends EventTarget {
     }
 
     onerror(e) {
-        if (this.worker) {
+        if (this.destination || this.worker) {
             this.dispatchEvent(new CustomEvent('error', { detail: e }));
         }
     };
