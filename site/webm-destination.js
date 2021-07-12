@@ -52,12 +52,12 @@ export class WebMDestination extends EventTarget {
                     this.dispatchEvent(new CustomEvent('message', { detail:  msg }));
                     break;
                 case 'exit':
+                    this.worker.terminate();
                     this.worker = null;
                     this.dispatchEvent(new CustomEvent('message', { detail: {
                         type: msg.type,
                         code: msg.data
                     }}));
-                    this.worker.terminate();
                     break;
             }
         };
@@ -77,18 +77,16 @@ export class WebMDestination extends EventTarget {
         if (this.worker) {
             if (force) {
                 this.worker.terminate();
-                self.postMessage({
-                    this.dispatchEvent(new CustomEvent('message', { detail: {
-                        type: 'exit',
-                        code: 'force-end'
-                    }}));
-                });
+                this.worker = null;
+                this.dispatchEvent(new CustomEvent('message', { detail: {
+                    type: 'exit',
+                    code: 'force-end'
+                }}));
             } else {
                 this.worker.postMessage({
                     type: 'stream-end'
                 });
             }
-            this.worker = null;
         }
     }
 
