@@ -1,4 +1,4 @@
-export class WebMDestination extends EventTarget {
+export class MuxReceiver extends EventTarget {
     constructor() {
         super();
         setTimeout(() => {
@@ -19,6 +19,7 @@ export class WebMDestination extends EventTarget {
                         type: 'run',
                         arguments: [
                             '-loglevel', 'debug',
+                            '-seekable', '0',
                             ...ffmpeg_args,
                             '-f', 'hls', // use hls encoder
                             '-hls_time', '2', // 2 second HLS chunks
@@ -51,12 +52,12 @@ export class WebMDestination extends EventTarget {
                     });
                     this.dispatchEvent(new CustomEvent('message', { detail:  msg }));
                     break;
-                case 'exit':
+                case 'ffexit':
                     this.worker.terminate();
                     this.worker = null;
                     this.dispatchEvent(new CustomEvent('message', { detail: {
-                        type: msg.type,
-                        code: msg.data
+                        type: 'exit',
+                        code: msg.code
                     }}));
                     break;
             }

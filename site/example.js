@@ -131,10 +131,12 @@ async function start() {
         // use glsl-canvas to make managing webgl stuff easier
         // because it's not visible, client dimensions are zero so we
         // need to substitute actual dimensions instead
-        gl_canvas = new GlCanvas(canvas_el);
+        gl_canvas = new GlCanvas(canvas_el, {
+            // as an example, greyscale the stream
+            fragmentString: shader
+        });
 
-        // as an example, greyscale the stream
-        gl_canvas.load(shader);
+        gl_canvas.on('error', cleanup);
 
         // tell canvas to use frames from video
         gl_canvas.setTexture('u_texture', video_el);
@@ -144,8 +146,13 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
-                canvas_el.width = this.videoWidth;
-                canvas_el.height = this.videoHeight;
+                if (this.videoWidth > this.videoHeight) {
+                    canvas_el.width = this.videoWidth;
+                    canvas_el.height = this.videoHeight;
+                } else {
+                    canvas_el.width = this.videoHeight;
+                    canvas_el.height = this.videoWidth;
+                }
 
                 // start the camera video
                 this.play();
@@ -153,8 +160,8 @@ async function start() {
                 // capture video from the canvas
                 // Note: Safari on iOS doesn't get any data, might be related to
                 // https://bugs.webkit.org/show_bug.cgi?id=181663
-                canvas_stream = canvas_el.captureStream(
-                    camera_stream.getVideoTracks()[0].getSettings().frameRate);
+                const frame_rate = camera_stream.getVideoTracks()[0].getSettings().frameRate;
+                canvas_stream = canvas_el.captureStream(frame_rate);
 
                 // add audio if present
                 const audio_tracks = camera_stream.getAudioTracks();
@@ -163,7 +170,7 @@ async function start() {
                 }
 
                 // start HLS from the canvas stream to the ingestion URL
-                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url);
+                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate);
                 hls.addEventListener('run', () => console.log('HLS running'));
                 hls.addEventListener('exit', ev => {
                     const msg = `HLS exited with status ${ev.detail.code}`;

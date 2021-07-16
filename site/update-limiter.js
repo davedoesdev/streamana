@@ -1,6 +1,6 @@
 export class UpdateLimiter {
     constructor(nps) {
-        this.threshold = 1000/nps;
+        this.threshold = nps ? 1000/nps : 0;
         this.last = 0;
     }
 

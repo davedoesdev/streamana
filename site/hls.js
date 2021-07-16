@@ -1,16 +1,17 @@
 import { UpdateLimiter } from './update-limiter.js';
-import { WebMDestination } from './webm-destination.js';
+import { MuxReceiver } from './mux-receiver.js';
 
 const audioBitsPerSecond = 128 * 1000;
 const videoBitsPerSecond = 2500 * 1000;
 const key_frame_interval = 10;
 
 export class HLS extends EventTarget {
-    constructor(stream, base_url, ffmpeg_lib_url) {
+    constructor(stream, base_url, ffmpeg_lib_url, frame_rate) {
         super();
         this.stream = stream;
         this.base_url = base_url;
         this.ffmpeg_lib_url = ffmpeg_lib_url;
+        this.frame_rate = frame_rate;
         this.update_event = new CustomEvent('update');
     }
 
@@ -45,8 +46,8 @@ export class HLS extends EventTarget {
             console.log("Using MediaRecorder WebM/h264");
         } catch (ex) {
             console.warn(ex);
-            // next try WebCodecs - this should work on Chrome Android
             try {
+                // next try WebCodecs - this should work on Chrome including Android
                 this.webcodecs('avc1.42E01E' /*'avc1.42001E'*/,
                                'opus' /*'pcm'*/,
                                { avc: { format: 'annexb' } });
@@ -75,9 +76,9 @@ export class HLS extends EventTarget {
 
         // push encoded data into the ffmpeg worker
         recorder.ondataavailable = async event => {
-            if (this.destination) {
-                this.destination.muxed_data(await event.data.arrayBuffer(),
-                                            { name: 'stream1' });
+            if (this.receiver) {
+                this.receiver.muxed_data(await event.data.arrayBuffer(),
+                                         { name: 'stream1' });
             }
         };
 
@@ -86,19 +87,21 @@ export class HLS extends EventTarget {
         await context.audioWorklet.addModule('./dummy-worklet.js');
         const dummy_processor = new AudioWorkletNode(context, 'dummy-processor', {
             processorOptions: {
-                update_rate: this.stream.getVideoTracks()[0].getSettings().frameRate
+                update_rate: this.frame_rate
             }
         });
+        dummy_processor.onerror = onerror;
+        dummy_processor.onprocessorerror = onerror;
         dummy_processor.port.onmessage = () => this.dispatchEvent(this.update_event);
         dummy_processor.connect(context.destination);
 
         // start the ffmpeg worker
-        this.destination = new WebMDestination();
-        this.destination.addEventListener('message', e => {
+        this.receiver = new MuxReceiver();
+        this.receiver.addEventListener('message', e => {
             const msg = e.detail;
             switch (msg.type) {
                 case 'ready':
-                    this.destination.start({
+                    this.receiver.start({
                         ffmpeg_lib_url: this.ffmpeg_lib_url,
                         ffmpeg_args: [
                             '-i', '/work/stream1',
@@ -125,12 +128,13 @@ export class HLS extends EventTarget {
                     break;
 
                 case 'exit':
-                    this.destination = null;
+                    this.receiver = null;
                     if (recorder.state !== 'inactive') {
                         recorder.stop();
                     }
                     dummy_processor.port.postMessage({ type: 'stop' });
                     dummy_processor.disconnect();
+                    context.suspend();
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
@@ -148,7 +152,7 @@ export class HLS extends EventTarget {
         const audio_readable = (new MediaStreamTrackProcessor(audio_track)).readable;
         const audio_settings = audio_track.getSettings();
 
-        const update_limiter = new UpdateLimiter(video_settings.frameRate);
+        const update_limiter = new UpdateLimiter(this.frame_rate);
 
         const relay_data = ev => {
             const msg = ev.data;
@@ -233,7 +237,7 @@ export class HLS extends EventTarget {
                 video: {
                     width: video_settings.width,
                     height: video_settings.height,
-                    frame_rate: video_settings.frameRate,
+                    frame_rate: this.frame_rate,
                     codec_id: 'V_MPEG4/ISO/AVC'
                 },
                 audio: {
@@ -242,8 +246,8 @@ export class HLS extends EventTarget {
                     codec_id: 'A_OPUS'
                 }
             },
-            webm_destination: './webm-destination.js',
-            muxed_metadata: { name: 'stream1' },
+            webm_receiver: './mux-receiver.js',
+            webm_receiver_data: { name: 'stream1' },
             ffmpeg_lib_url: this.ffmpeg_lib_url,
             base_url: this.base_url,
             ffmpeg_args: [
@@ -258,8 +262,8 @@ export class HLS extends EventTarget {
     }
 
     end(force) {
-        if (this.destination) {
-            this.destination.end({ force });
+        if (this.receiver) {
+            this.receiver.end({ force });
         } else if (this.worker) {
             this.worker.postMessage({
                 type: 'end',
@@ -269,7 +273,7 @@ export class HLS extends EventTarget {
     }
 
     onerror(e) {
-        if (this.destination || this.worker) {
+        if (this.receiver || this.worker) {
             this.dispatchEvent(new CustomEvent('error', { detail: e }));
         }
     };
