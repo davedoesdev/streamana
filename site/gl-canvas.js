@@ -42,7 +42,9 @@ export class GlCanvas extends Canvas {
             // Better to "support" only hardware rendering (or very fast CPUs!), where
             // time to render each frame is only 1ms max.
             this.update_limiter.threshold = (Date.now() - now) * 2;
+            return true;
         }
+        return false;
     }
     // Prevent errors after destruction
     destroy() {

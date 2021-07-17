@@ -4,17 +4,16 @@ precision highp float;
 
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
+uniform bool u_portrait;
 
 out vec4 colour;
 
 void main() {
   vec2 coord;
-  // TODO: we should pass in whether to invert
-  ivec2 size = textureSize(u_texture, 0);
-  if (size.x > size.y) {
-    coord = gl_FragCoord.xy / u_resolution.xy;
-  } else {
+  if (u_portrait) {
     coord = gl_FragCoord.yx / u_resolution.yx;
+  } else {
+    coord = gl_FragCoord.xy / u_resolution.xy;
   }
   vec3 color = texture(u_texture, coord).rgb;
   float grey = dot(color, vec3(0.299, 0.587, 0.114));

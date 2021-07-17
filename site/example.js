@@ -44,11 +44,11 @@ async function start() {
 
     go_live_el.disabled = true;
     waiting_el.classList.remove('d-none');
-    const parent_el = canvas_el.parentNode;
-    parent_el.removeChild(canvas_el);
+    const canvas_el_parent = canvas_el.parentNode;
+    canvas_el_parent.removeChild(canvas_el);
     canvas_el = canvas_proto.cloneNode();
     canvas_el.classList.add('invisible');
-    parent_el.appendChild(canvas_el);
+    canvas_el_parent.appendChild(canvas_el);
 
     if (error_alert_el.parentNode) {
         error_alert_el_parent.removeChild(error_alert_el);
@@ -146,13 +146,16 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
-                if (this.videoWidth > this.videoHeight) {
-                    canvas_el.width = this.videoWidth;
-                    canvas_el.height = this.videoHeight;
-                } else {
+                const portrait = this.videoHeight > this.videoWidth;
+                if (portrait) {
                     canvas_el.width = this.videoHeight;
                     canvas_el.height = this.videoWidth;
+                    canvas_el.classList.add('portrait');
+                } else {
+                    canvas_el.width = this.videoWidth;
+                    canvas_el.height = this.videoHeight;
                 }
+                gl_canvas.setUniform('u_portrait', portrait);
 
                 // start the camera video
                 this.play();
@@ -167,6 +170,13 @@ async function start() {
                 const audio_tracks = camera_stream.getAudioTracks();
                 if (audio_tracks.length > 0) {
                     canvas_stream.addTrack(audio_tracks[0]);
+                }
+
+                function update() {
+                    // update the canvas
+                    if (gl_canvas.onLoop() && portrait) {
+                        canvas_el.style.height = canvas_el_parent.clientWidth;
+                    }
                 }
 
                 // start HLS from the canvas stream to the ingestion URL
@@ -186,11 +196,9 @@ async function start() {
                     waiting_el.classList.add('d-none');
                     canvas_el.classList.remove('invisible');
                     go_live_el.disabled = false;
-                    gl_canvas.onLoop();
+                    update();
                 });
-                hls.addEventListener('update', () => {
-                    gl_canvas.onLoop();
-                });
+                hls.addEventListener('update', update);
                 await hls.start();
             } catch (ex) {
                 cleanup(ex);
