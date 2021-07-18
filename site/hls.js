@@ -109,6 +109,7 @@ export class HLS extends EventTarget {
                             '-map', '0:v',
                             '-map', '0:a',
                             '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
+                            ...(this.portrait ? ['-metadata:s:v:0', 'rotate=-90'] : []),
                             ...(recorder.mimeType === 'video/mp4' ?
                                 ['-c:a', 'copy'] : // assume already AAC
                                 ['-c:a', 'aac',  // re-encode audio as AAC-LC
