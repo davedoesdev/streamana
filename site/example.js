@@ -146,16 +146,15 @@ async function start() {
         // registers a loadeddata handler which then registers a play handler)
         video_el.addEventListener('loadeddata', async function () {
             try {
-                if (!document.fullscreenElement) {
-                    await document.documentElement.requestFullscreen();
-                }
-
                 // make canvas same size as native video dimensions so every pixel is seen
                 const portrait = this.videoHeight > this.videoWidth;
                 if (portrait) {
                     canvas_el.width = this.videoHeight;
                     canvas_el.height = this.videoWidth;
                     canvas_el.classList.add('portrait');
+                    if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                    }
                     screen.orientation.lock('portrait');
                 } else {
                     canvas_el.width = this.videoWidth;
