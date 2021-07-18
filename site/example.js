@@ -63,6 +63,7 @@ async function start() {
             return;
         }
         done = true;
+        document.exitFullscreen();
         if (err) {
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
             error_alert_el.classList.add('show');
@@ -145,15 +146,21 @@ async function start() {
         // registers a loadeddata handler which then registers a play handler)
         video_el.addEventListener('loadeddata', async function () {
             try {
+                if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen();
+                }
+
                 // make canvas same size as native video dimensions so every pixel is seen
                 const portrait = this.videoHeight > this.videoWidth;
                 if (portrait) {
                     canvas_el.width = this.videoHeight;
                     canvas_el.height = this.videoWidth;
                     canvas_el.classList.add('portrait');
+                    screen.orientation.lock('portrait');
                 } else {
                     canvas_el.width = this.videoWidth;
                     canvas_el.height = this.videoHeight;
+                    screen.orientation.lock('landscape');
                 }
                 gl_canvas.setUniform('u_portrait', portrait);
 
