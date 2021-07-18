@@ -180,7 +180,7 @@ async function start() {
                 }
 
                 // start HLS from the canvas stream to the ingestion URL
-                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate);
+                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate, portrait);
                 hls.addEventListener('run', () => console.log('HLS running'));
                 hls.addEventListener('exit', ev => {
                     const msg = `HLS exited with status ${ev.detail.code}`;
