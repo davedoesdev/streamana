@@ -24,10 +24,16 @@ const error_alert_el_nextSibling = error_alert_el.nextSibling;
 error_alert_el_parent.removeChild(error_alert_el);
 
 const ffmpeg_lib_url_el = document.getElementById('ffmpeg-lib-url');
-ffmpeg_lib_url_el.value = localStorage.getItem('streamana-ffmpeg-lib-url');
+
+const initial_ffmpeg_lib_url = (localStorage.getItem('streamana-ffmpeg-lib-url') || '').trim();
+if (initial_ffmpeg_lib_url) {
+    ffmpeg_lib_url_el.value = initial_ffmpeg_lib_url;
+}
 ffmpeg_lib_url_el.addEventListener('input', function (e) {
     localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
 });
+
+const lock_portrait_el = document.getElementById('lock-portrait');
 
 let hls;
 
@@ -54,7 +60,7 @@ async function start() {
         error_alert_el_parent.removeChild(error_alert_el);
     }
 
-    let camera_stream, gl_canvas, canvas_stream, done = false;
+    let camera_stream, gl_canvas, canvas_stream, lock_portrait = false, done = false;
     function cleanup(err) {
         if (err) {
             console.error(err);
@@ -63,7 +69,12 @@ async function start() {
             return;
         }
         done = true;
-        document.exitFullscreen();
+        if (lock_portrait) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            screen.orientation.unlock();
+        }
         if (err) {
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
             error_alert_el.classList.add('show');
@@ -147,21 +158,20 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
-                const portrait = this.videoHeight > this.videoWidth;
-                if (portrait) {
-                    canvas_el.width = this.videoHeight;
-                    canvas_el.height = this.videoWidth;
-                    canvas_el.classList.add('portrait');
+                if ((this.videoHeight > this.videoWidth) && lock_portrait_el.checked) {
                     if (!document.fullscreenElement) {
                         await document.documentElement.requestFullscreen();
                     }
-                    screen.orientation.lock('portrait');
+                    await screen.orientation.lock('portrait');
+                    canvas_el.width = this.videoHeight;
+                    canvas_el.height = this.videoWidth;
+                    canvas_el.classList.add('rotate');
+                    lock_portrait = true;
                 } else {
                     canvas_el.width = this.videoWidth;
                     canvas_el.height = this.videoHeight;
-                    screen.orientation.lock('landscape');
                 }
-                gl_canvas.setUniform('u_portrait', portrait);
+                gl_canvas.setUniform('u_rotate_portrait', lock_portrait);
 
                 // start the camera video
                 this.play();
@@ -180,13 +190,13 @@ async function start() {
 
                 function update() {
                     // update the canvas
-                    if (gl_canvas.onLoop() && portrait) {
+                    if (gl_canvas.onLoop() && lock_portrait) {
                         canvas_el.style.height = canvas_el_parent.clientWidth;
                     }
                 }
 
                 // start HLS from the canvas stream to the ingestion URL
-                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate, portrait);
+                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate, lock_portrait);
                 hls.addEventListener('run', () => console.log('HLS running'));
                 hls.addEventListener('exit', ev => {
                     const msg = `HLS exited with status ${ev.detail.code}`;

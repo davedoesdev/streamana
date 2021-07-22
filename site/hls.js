@@ -6,13 +6,17 @@ const videoBitsPerSecond = 2500 * 1000;
 const key_frame_interval = 3;
 
 export class HLS extends EventTarget {
-    constructor(stream, base_url, ffmpeg_lib_url, frame_rate, portrait) {
+    constructor(stream, base_url, ffmpeg_lib_url, frame_rate, rotate) {
         super();
         this.stream = stream;
         this.base_url = base_url;
         this.ffmpeg_lib_url = ffmpeg_lib_url;
         this.frame_rate = frame_rate;
-        this.portrait = portrait;
+        if (rotate) {
+            this.ffmpeg_metadata = ['-metadata:s:v:0', 'rotate=-90'];
+        } else {
+            this.ffmpeg_metadata = [];
+        }
         this.update_event = new CustomEvent('update');
     }
 
@@ -109,7 +113,7 @@ export class HLS extends EventTarget {
                             '-map', '0:v',
                             '-map', '0:a',
                             '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                            ...(this.portrait ? ['-metadata:s:v:0', 'rotate=-90'] : []),
+                            ...this.ffmpeg_metadata,
                             ...(recorder.mimeType === 'video/mp4' ?
                                 ['-c:a', 'copy'] : // assume already AAC
                                 ['-c:a', 'aac',  // re-encode audio as AAC-LC
@@ -257,7 +261,7 @@ export class HLS extends EventTarget {
                 '-map', '0:v',
                 '-map', '0:a',
                 '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                ...(this.portrait ? ['-metadata:s:v:0', 'rotate=-90'] : []),
+                ...this.ffmpeg_metadata,
                 '-c:a', 'aac',  // re-encode audio as AAC-LC
                 '-b:a', audioBitsPerSecond.toString() // set audio bitrate
             ]
