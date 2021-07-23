@@ -24,16 +24,19 @@ const error_alert_el_nextSibling = error_alert_el.nextSibling;
 error_alert_el_parent.removeChild(error_alert_el);
 
 const ffmpeg_lib_url_el = document.getElementById('ffmpeg-lib-url');
-
 const initial_ffmpeg_lib_url = (localStorage.getItem('streamana-ffmpeg-lib-url') || '').trim();
 if (initial_ffmpeg_lib_url) {
     ffmpeg_lib_url_el.value = initial_ffmpeg_lib_url;
 }
-ffmpeg_lib_url_el.addEventListener('input', function (e) {
+ffmpeg_lib_url_el.addEventListener('input', function () {
     localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
 });
 
 const lock_portrait_el = document.getElementById('lock-portrait');
+lock_portrait_el.checked = !!localStorage.getItem('streamana-lock-portrait');
+lock_portrait_el.addEventListener('input', function () {
+    localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
+});
 
 let hls;
 
@@ -70,6 +73,7 @@ async function start() {
         }
         done = true;
         if (lock_portrait) {
+            canvas_el_parent.classList.add('mx-auto');
             if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
@@ -117,10 +121,12 @@ async function start() {
 
         // capture video from webcam
         const video_constraints = {
-            //width: 4096,
-            //height: 2160,
-            width: 1280,
-            height: 720,
+            width: 4096,
+            height: 2160,
+            //width: 1280,
+            //height: 720,
+            //width: 800,
+            //height: 600,
             frameRate: {
                 ideal: 30,
                 max: 30
@@ -140,6 +146,8 @@ async function start() {
             });
         }
 
+        canvas_el.addEventListener('webglcontextlost', cleanup);
+
         // use glsl-canvas to make managing webgl stuff easier
         // because it's not visible, client dimensions are zero so we
         // need to substitute actual dimensions instead
@@ -158,20 +166,33 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
-                if ((this.videoHeight > this.videoWidth) && lock_portrait_el.checked) {
-                    if (!document.fullscreenElement) {
-                        await document.documentElement.requestFullscreen();
-                    }
-                    await screen.orientation.lock('portrait');
-                    canvas_el.width = this.videoHeight;
-                    canvas_el.height = this.videoWidth;
-                    canvas_el.classList.add('rotate');
-                    lock_portrait = true;
-                } else {
+                if (this.videoWidth >= this.videoHeight) {
                     canvas_el.width = this.videoWidth;
                     canvas_el.height = this.videoHeight;
+                } else {
+                    if (lock_portrait_el.checked) {
+                        lock_portrait = true;
+                        //canvas_el.classList.add('rotate');
+                        //canvas_el.classList.remove('mw-100', 'mh-100');
+                        //canvas_el_parent.classList.remove('mx-auto');
+                        try {
+                            await screen.orientation.lock('portrait');
+                        } catch (ex) {
+                            if (ex.name === 'SecurityError') {
+                                if (!document.fullscreenElement) {
+                                    await document.documentElement.requestFullscreen();
+                                }
+                                await screen.orientation.lock('portrait');
+                            } else if (ex.name !== 'NotSupportedError') {
+                                throw ex;
+                            }
+                        }
+                    }
+                    canvas_el.width = this.videoHeight;
+                    canvas_el.height = this.videoWidth;
                 }
-                gl_canvas.setUniform('u_rotate_portrait', lock_portrait);
+                gl_canvas.setUniform('u_rotate', lock_portrait);
+                const ar_canvas = canvas_el.width / canvas_el.height;
 
                 // start the camera video
                 this.play();
@@ -190,8 +211,25 @@ async function start() {
 
                 function update() {
                     // update the canvas
-                    if (gl_canvas.onLoop() && lock_portrait) {
-                        canvas_el.style.height = canvas_el_parent.clientWidth;
+                    if (gl_canvas.onLoop()) {
+                        if (lock_portrait) {
+                            //canvas_el.style.height = canvas_el_parent.clientWidth;
+                        } else {
+                            // Note: we need to use canvas_el_parent.parentNode.offsetWidth
+                            // to take into account margins
+                            const ar_parent = canvas_el_parent.parentNode.offsetWidth /
+                                              canvas_el_parent.offsetHeight;
+                            if (ar_parent >= ar_canvas) {
+                                canvas_el.style.width = canvas_el_parent.offsetHeight * ar_canvas;
+                                canvas_el.style.height = canvas_el_parent.offsetHeight;
+                            } else {
+                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth;
+                                canvas_el.style.height = canvas_el_paretn.parentNode.offsetWidth / ar_canvas;
+                            }
+                        }
+                        // TODO: response top section
+                        // fix locked portrait: rotate
+                        // can we zoom in locked + unlocked portrait if device is in portrait orientation?
                     }
                 }
 
@@ -208,7 +246,10 @@ async function start() {
                     }
                 });
                 hls.addEventListener('error', cleanup);
-                hls.addEventListener('start', () => {
+                hls.addEventListener('start', function () {
+                    if (done) {
+                        this.end(true);
+                    }
                     waiting_el.classList.add('d-none');
                     canvas_el.classList.remove('invisible');
                     go_live_el.disabled = false;
