@@ -172,9 +172,9 @@ async function start() {
                 } else {
                     if (lock_portrait_el.checked) {
                         lock_portrait = true;
-                        //canvas_el.classList.add('rotate');
-                        //canvas_el.classList.remove('mw-100', 'mh-100');
-                        //canvas_el_parent.classList.remove('mx-auto');
+                        canvas_el.classList.add('rotate');
+                        canvas_el.classList.remove('mw-100', 'mh-100');
+                        canvas_el_parent.classList.remove('mx-auto');
                         try {
                             await screen.orientation.lock('portrait');
                         } catch (ex) {
@@ -192,7 +192,8 @@ async function start() {
                     canvas_el.height = this.videoWidth;
                 }
                 gl_canvas.setUniform('u_rotate', lock_portrait);
-                const ar_canvas = canvas_el.width / canvas_el.height;
+                const ar_canvas = lock_portrait ? canvas_el.height / canvas_el.width :
+                                                  canvas_el.width / canvas_el.height;
 
                 // start the camera video
                 this.play();
@@ -212,24 +213,29 @@ async function start() {
                 function update() {
                     // update the canvas
                     if (gl_canvas.onLoop()) {
+                        // Note: we need to use canvas_el_parent.parentNode.offsetWidth
+                        // to take into account margins
+                        const ar_parent = canvas_el_parent.parentNode.offsetWidth /
+                                          canvas_el_parent.offsetHeight;
                         if (lock_portrait) {
-                            //canvas_el.style.height = canvas_el_parent.clientWidth;
-                        } else {
-                            // Note: we need to use canvas_el_parent.parentNode.offsetWidth
-                            // to take into account margins
-                            const ar_parent = canvas_el_parent.parentNode.offsetWidth /
-                                              canvas_el_parent.offsetHeight;
                             if (ar_parent >= ar_canvas) {
-                                canvas_el.style.width = canvas_el_parent.offsetHeight * ar_canvas;
-                                canvas_el.style.height = canvas_el_parent.offsetHeight;
+                                canvas_el.style.width = canvas_el_parent.offsetHeight;
+                                canvas_el.style.height = canvas_el_parent.offsetHeight * ar_canvas;
                             } else {
-                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth;
-                                canvas_el.style.height = canvas_el_paretn.parentNode.offsetWidth / ar_canvas;
+                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
+                                canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth;
                             }
+                        } else if (ar_parent >= ar_canvas) {
+                            canvas_el.style.width = canvas_el_parent.offsetHeight * ar_canvas;
+                            canvas_el.style.height = canvas_el_parent.offsetHeight;
+                        } else {
+                            canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth;
+                            canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
                         }
-                        // TODO: response top section
-                        // fix locked portrait: rotate
-                        // can we zoom in locked + unlocked portrait if device is in portrait orientation?
+                        // TODO: response including top section
+                        // can we zoom in unlocked portrait if device is in portrait orientation?
+                        // consolidate shader
+                        // windows, android, iOS, find a mac to test
                     }
                 }
 
