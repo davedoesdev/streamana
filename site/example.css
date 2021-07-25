@@ -1,6 +1,11 @@
-canvas.rotate {
+canvas.rotate, canvas.zoom {
   position: absolute;
   top: 50%;
   left: 50%;
+}
+canvas.rotate {
   transform: translate(-50%,-50%) rotate(-90deg);
+}
+canvas.zoom {
+  transform: translate(-50%,-50%);
 }

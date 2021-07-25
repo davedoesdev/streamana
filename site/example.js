@@ -32,10 +32,18 @@ ffmpeg_lib_url_el.addEventListener('input', function () {
     localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
 });
 
+const zoom_portrait_el = document.getElementById('zoom-portrait');
+zoom_portrait_el.checked = !!localStorage.getItem('streamana-zoom-portrait');
+zoom_portrait_el.addEventListener('input', function () {
+    localStorage.setItem('streamana-zoom-portrait', this.checked ? 'true' : '');
+});
+
 const lock_portrait_el = document.getElementById('lock-portrait');
 lock_portrait_el.checked = !!localStorage.getItem('streamana-lock-portrait');
+zoom_portrait_el.disabled = lock_portrait_el.checked;
 lock_portrait_el.addEventListener('input', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
+    zoom_portrait_el.disabled = this.checked;
 });
 
 let hls;
@@ -52,6 +60,9 @@ async function start() {
                            ffmpeg_lib_url_el.placeholder.trim();
 
     go_live_el.disabled = true;
+    ffmpeg_lib_url_el.disabled = true;
+    lock_portrait_el.disabled = true;
+    zoom_portrait_el.disabled = true;
     waiting_el.classList.remove('d-none');
     const canvas_el_parent = canvas_el.parentNode;
     canvas_el_parent.removeChild(canvas_el);
@@ -72,12 +83,12 @@ async function start() {
             return;
         }
         done = true;
+        canvas_el_parent.classList.add('mx-auto');
         if (lock_portrait) {
-            canvas_el_parent.classList.add('mx-auto');
+            screen.orientation.unlock();
             if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
-            screen.orientation.unlock();
         }
         if (err) {
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
@@ -101,6 +112,9 @@ async function start() {
         }
         go_live_el.checked = false;
         go_live_el.disabled = false;
+        ffmpeg_lib_url_el.disabled = false;
+        lock_portrait_el.disabled = false;
+        zoom_portrait_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -166,10 +180,9 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 // make canvas same size as native video dimensions so every pixel is seen
-                if (this.videoWidth >= this.videoHeight) {
-                    canvas_el.width = this.videoWidth;
-                    canvas_el.height = this.videoHeight;
-                } else {
+                const portrait = this.videoWidth < this.videoHeight;
+                let zoom_portrait = false;
+                if (portrait) {
                     if (lock_portrait_el.checked) {
                         lock_portrait = true;
                         canvas_el.classList.add('rotate');
@@ -187,13 +200,22 @@ async function start() {
                                 throw ex;
                             }
                         }
+                    } else if (zoom_portrait_el.checked) {
+                        zoom_portrait = true;
+                        canvas_el.classList.add('zoom');
+                        canvas_el.classList.remove('mw-100', 'mh-100');
+                        canvas_el_parent.classList.remove('mx-auto');
                     }
                     canvas_el.width = this.videoHeight;
                     canvas_el.height = this.videoWidth;
+                } else {
+                    canvas_el.width = this.videoWidth;
+                    canvas_el.height = this.videoHeight;
                 }
                 gl_canvas.setUniform('u_rotate', lock_portrait);
-                const ar_canvas = lock_portrait ? canvas_el.height / canvas_el.width :
-                                                  canvas_el.width / canvas_el.height;
+                const ar_canvas = lock_portrait || zoom_portrait ?
+                        canvas_el.height / canvas_el.width :
+                        canvas_el.width / canvas_el.height;
 
                 // start the camera video
                 this.play();
@@ -225,6 +247,20 @@ async function start() {
                                 canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
                                 canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth;
                             }
+                        } else if (zoom_portrait) {
+                            if (ar_parent >= ar_canvas) {
+                                // canvas_el.style.width = canvas_el_parent.offsetHeight * (1 / ar_canvas);  =>
+                                canvas_el.style.width = canvas_el_parent.offsetHeight / ar_canvas;
+                                canvas_el.style.height = canvas_el_parent.offsetHeight;
+                            } else {
+                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / (canvas_el.height * ar_canvas / canvas_el.width);  =>
+                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * canvas_el.width / (canvas_el.height * ar_canvas)  =>
+                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (canvas_el.width / canvas_el.height) / ar_canvas  =>
+                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (1 / ar_canvas) / ar_canvas  =>
+                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / ar_canvas ** 2;
+                                // canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / (1 / ar_canvas); =>
+                                canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth * ar_canvas;
+                            }
                         } else if (ar_parent >= ar_canvas) {
                             canvas_el.style.width = canvas_el_parent.offsetHeight * ar_canvas;
                             canvas_el.style.height = canvas_el_parent.offsetHeight;
@@ -232,10 +268,9 @@ async function start() {
                             canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth;
                             canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
                         }
-                        // TODO: response including top section
-                        // can we zoom in unlocked portrait if device is in portrait orientation?
-                        // consolidate shader
+                        // TODO: responsive including top section
                         // windows, android, iOS, find a mac to test
+                        // check behaviour when rotate phone
                     }
                 }
 
