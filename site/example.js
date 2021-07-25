@@ -114,7 +114,7 @@ async function start() {
         go_live_el.disabled = false;
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
-        zoom_portrait_el.disabled = false;
+        zoom_portrait_el.disabled = lock_portrait_el.checked;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
