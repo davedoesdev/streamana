@@ -10,24 +10,24 @@
   <body class="d-flex flex-column h-100">
     <nav id="nav" class="navbar navbar-light bg-light flex-grow-0">
       <div class="container-fluid">
-      <div class="row gx-2 w-100 mx-0">
-      <div class="col-sm col-auto">
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarToggleExternalContent">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-      </div>
-      <div class="col-sm">
-        <input id="ingestion-url" type="text" class="form-control" placeholder="Ingestion URL">
-      </div>
-      <div class="col-sm col-auto">
-        <div class="input-group-text">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="go-live" disabled autocomplete="off">
-            <label for="go-live">Go Live</label>
+        <div class="row gx-2 gy-2 gy-sm-0 w-100 mx-0 align-items-center">
+          <div class="col-sm col-auto order-1">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarToggleExternalContent">
+              <span class="navbar-toggler-icon"></span>
+            </button>
+          </div>
+          <div class="col-sm order-3 order-sm-2">
+            <input id="ingestion-url" type="text" class="form-control" placeholder="Ingestion URL">
+          </div>
+          <div class="col-sm col-auto order-2 order-sm-3 ms-auto">
+            <div class="input-group-text">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="go-live" disabled autocomplete="off">
+                <label for="go-live">Go Live</label>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      </div>
       </div>
     </nav>
     <div class="collapse p-3 bg-light text-dark card border-dark flex-grow-0" id="navbarToggleExternalContent">
