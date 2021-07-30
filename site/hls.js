@@ -48,7 +48,7 @@ export class HLS extends EventTarget {
 
         try {
             // first try WebM/H264 MediaRecorder - this should work on Chrome Linux and Windows
-            await this.media_recorder('video/webm;codecs=H265');
+            await this.media_recorder('video/webm;codecs=H264');
             console.log("Using MediaRecorder WebM/h264");
         } catch (ex) {
             console.warn(ex);

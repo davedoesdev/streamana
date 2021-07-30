@@ -274,7 +274,6 @@ async function start() {
                             canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
                         }
                         // TODO:
-                        // still if click stop too soon get error
                         // windows, android, iOS, find a mac to test
                         // check behaviour when rotate phone
                     }
