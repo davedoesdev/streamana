@@ -50,6 +50,8 @@ export class MuxReceiver extends EventTarget {
                         type: 'base-url',
                         data: base_url
                     });
+                    // falls through
+                case 'sending':
                     this.dispatchEvent(new CustomEvent('message', { detail:  msg }));
                     break;
                 case 'ffexit':

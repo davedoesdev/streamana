@@ -18,6 +18,7 @@ export class HLS extends EventTarget {
             this.ffmpeg_metadata = [];
         }
         this.update_event = new CustomEvent('update');
+        this.sending = false;
     }
 
     async start() {
@@ -47,7 +48,7 @@ export class HLS extends EventTarget {
 
         try {
             // first try WebM/H264 MediaRecorder - this should work on Chrome Linux and Windows
-            await this.media_recorder('video/webm;codecs=H264');
+            await this.media_recorder('video/webm;codecs=H265');
             console.log("Using MediaRecorder WebM/h264");
         } catch (ex) {
             console.warn(ex);
@@ -133,6 +134,10 @@ export class HLS extends EventTarget {
                     this.dispatchEvent(new CustomEvent('start'));
                     break;
 
+                case 'sending':
+                    this.sending = true;
+                    break;
+
                 case 'exit':
                     this.receiver = null;
                     if (recorder.state !== 'inactive') {
@@ -141,6 +146,9 @@ export class HLS extends EventTarget {
                     dummy_processor.port.postMessage({ type: 'stop' });
                     dummy_processor.disconnect();
                     context.suspend();
+                    if ((msg.code === 'force-end') && !this.sending) {
+                        msg.code = 0;
+                    }
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
@@ -226,11 +234,18 @@ export class HLS extends EventTarget {
                     onerror(msg.detail);
                     break;
 
+                case 'sending':
+                    this.sending = true;
+                    break;
+
                 case 'exit':
                     this.worker.terminate();
                     this.worker = null;
                     video_worker.terminate();
                     audio_worker.terminate();
+                    if ((msg.code === 'force-end') && !this.sending) {
+                        msg.code = 0;
+                    }
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
             }
@@ -269,6 +284,7 @@ export class HLS extends EventTarget {
     }
 
     end(force) {
+        force = force || !this.sending;
         if (this.receiver) {
             this.receiver.end({ force });
         } else if (this.worker) {
