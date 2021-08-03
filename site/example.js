@@ -134,16 +134,16 @@ async function start() {
 
         // Safari on iOS requires us to play() in the click handler and doesn't
         // track async calls. So we play a blank video first. After that, the video
-        // element is blessed for script-driver playback.
+        // element is blessed for script-driven playback.
         video_el.src = 'empty.mp4';
         await video_el.play();
 
         // capture video from webcam
         const video_constraints = {
-            width: 4096,
-            height: 2160,
-            //width: 1280,
-            //height: 720,
+            //width: 4096,
+            //height: 2160,
+            width: 1280,
+            height: 720,
             //width: 800,
             //height: 600,
             frameRate: {
@@ -184,6 +184,7 @@ async function start() {
         // registers a loadeddata handler which then registers a play handler)
         video_el.addEventListener('loadeddata', async function () {
             try {
+                console.log(`video width=${this.videoWidth} height=${this.videoHeight}`);
                 // make canvas same size as native video dimensions so every pixel is seen
                 const portrait = this.videoWidth < this.videoHeight;
                 let zoom_portrait = false;
@@ -246,34 +247,37 @@ async function start() {
                                           canvas_el_parent.offsetHeight;
                         if (lock_portrait) {
                             if (ar_parent >= ar_canvas) {
-                                canvas_el.style.width = canvas_el_parent.offsetHeight;
-                                canvas_el.style.height = canvas_el_parent.offsetHeight * ar_canvas;
+                                canvas_el.style.width = `${canvas_el_parent.offsetHeight}px`;
+                                canvas_el.style.height = `${canvas_el_parent.offsetHeight * ar_canvas}px`;
                             } else {
-                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
-                                canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth;
+                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
+                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth}px`;
                             }
                         } else if (zoom_portrait) {
                             if (ar_parent >= ar_canvas) {
                                 // canvas_el.style.width = canvas_el_parent.offsetHeight * (1 / ar_canvas);  =>
-                                canvas_el.style.width = canvas_el_parent.offsetHeight / ar_canvas;
-                                canvas_el.style.height = canvas_el_parent.offsetHeight;
+                                canvas_el.style.width = `${canvas_el_parent.offsetHeight / ar_canvas}px`;
+                                canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
                             } else {
                                 // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / (canvas_el.height * ar_canvas / canvas_el.width);  =>
                                 // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * canvas_el.width / (canvas_el.height * ar_canvas)  =>
                                 // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (canvas_el.width / canvas_el.height) / ar_canvas  =>
                                 // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (1 / ar_canvas) / ar_canvas  =>
-                                canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / ar_canvas ** 2;
+                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas ** 2}px`;
                                 // canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / (1 / ar_canvas); =>
-                                canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth * ar_canvas;
+                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth * ar_canvas}px`;
                             }
                         } else if (ar_parent >= ar_canvas) {
-                            canvas_el.style.width = canvas_el_parent.offsetHeight * ar_canvas;
-                            canvas_el.style.height = canvas_el_parent.offsetHeight;
+                            canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_canvas}px`;
+                            canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
                         } else {
-                            canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth;
-                            canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / ar_canvas;
+                            canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth}px`;
+                            canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
                         }
                         // TODO:
+                        // a40 no buffers currently available in the reader queue
+                        // we need to detect what resolutions encoder will support
+                        //   and either capture at that resolution or can canvas downscale?
                         // windows, android, iOS, find a mac to test
                         // check behaviour when rotate phone
                     }
