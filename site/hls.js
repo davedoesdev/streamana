@@ -80,6 +80,10 @@ export class HLS extends EventTarget {
         });
         recorder.onerror = onerror;
 
+        recorder.onstop = () => {
+            this.receiver.end({ force: false });
+        };
+
         // push encoded data into the ffmpeg worker
         recorder.ondataavailable = async event => {
             if (this.receiver) {
@@ -168,11 +172,21 @@ export class HLS extends EventTarget {
 
         const update_limiter = new UpdateLimiter(this.frame_rate);
 
+        let num_exits = 0;
+
         const relay_data = ev => {
             const msg = ev.data;
             switch (msg.type) {
                 case 'error':
                     onerror(msg.detail);
+                    break;
+
+                case 'exit':
+                    if (++num_exits === 2) {
+                        this.worker.postMessage({
+                            type: 'end'
+                        });
+                    }
                     break;
 
                 case 'audio-data':
@@ -285,13 +299,19 @@ export class HLS extends EventTarget {
 
     end(force) {
         force = force || !this.sending;
-        if (this.receiver) {
-            this.receiver.end({ force });
-        } else if (this.worker) {
-            this.worker.postMessage({
-                type: 'end',
-                force
-            });
+        if (force) {
+            if (this.receiver) {
+                this.receiver.end({ force });
+            } else if (this.worker) {
+                this.worker.postMessage({
+                    type: 'end',
+                    force
+                });
+            }
+        } else {
+            for (let track of this.stream.getTracks()) {
+                track.stop();
+            }
         }
     }
 
