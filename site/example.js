@@ -16,6 +16,7 @@ go_live_el.addEventListener('click', function () {
 });
 
 let canvas_el = document.getElementById('canvas');
+const canvas_el_parent = canvas_el.parentNode;
 const canvas_proto = canvas_el.cloneNode();
 const waiting_el = document.getElementById('waiting');
 const error_alert_el = document.getElementById('error-alert');
@@ -46,6 +47,17 @@ lock_portrait_el.addEventListener('input', function () {
     zoom_portrait_el.disabled = this.checked;
 });
 
+document.body.addEventListener('click', function (ev) {
+    if ((ev.target === document.body) ||
+        (ev.target === canvas_el_parent) ||
+        (ev.target.parentNode === canvas_el_parent)) {
+        const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
+        if (collapse) {
+            collapse.hide();
+        }
+    }
+});
+
 let hls;
 
 async function start() {
@@ -67,7 +79,6 @@ async function start() {
     zoom_portrait_el.disabled = true;
     waiting_el.classList.remove('d-none');
 
-    const canvas_el_parent = canvas_el.parentNode;
     canvas_el_parent.removeChild(canvas_el);
     canvas_el = canvas_proto.cloneNode();
     canvas_el.classList.add('invisible');
@@ -278,6 +289,12 @@ async function start() {
                         // a40 no buffers currently available in the reader queue
                         // we need to detect what resolutions encoder will support
                         //   and either capture at that resolution or can canvas downscale?
+                        //   canvas should already scale so we could set that as the maximum
+                        //   supported encoder resolution and let it scale
+                        //   or just use maximum common between camera and encoder
+                        //   - do this in webm-muxer.js as separate module
+                        //   get all the encoder resolutions and allow user to select one
+                        //   then choose next largest camera
                         // windows, android, iOS, find a mac to test
                         // check behaviour when rotate phone
                     }
