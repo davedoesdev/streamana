@@ -247,7 +247,7 @@ async function start() {
                 }
 
                 // make canvas same size as native video dimensions so every pixel is seen
-                const portrait = this.videoWidth < this.videoHeight;
+                const portrait = video_encoder_config.width < video_encoder_config.height;
                 let zoom_portrait = false;
                 if (portrait) {
                     if (lock_portrait_el.checked) {
@@ -273,11 +273,11 @@ async function start() {
                         canvas_el.classList.remove('mw-100', 'mh-100');
                         canvas_el_parent.classList.remove('mx-auto');
                     }
-                    canvas_el.width = this.videoHeight;
-                    canvas_el.height = this.videoWidth;
+                    canvas_el.width = video_encoder_config.height;
+                    canvas_el.height = video_encoder_config.width;
                 } else {
-                    canvas_el.width = this.videoWidth;
-                    canvas_el.height = this.videoHeight;
+                    canvas_el.width = video_encoder_config.width;
+                    canvas_el.height = video_encoder_config.height;
                 }
                 gl_canvas.setUniform('u_rotate', lock_portrait);
                 const ar_canvas = lock_portrait || zoom_portrait ?
