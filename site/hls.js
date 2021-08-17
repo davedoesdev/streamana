@@ -2,8 +2,10 @@ import { UpdateLimiter } from './update-limiter.js';
 import { MuxReceiver } from './mux-receiver.js';
 
 const audioBitsPerSecond = 128 * 1000;
-const videoBitsPerSecond = 2500 * 1000;
+export const videoBitsPerSecond = 2500 * 1000;
 const key_frame_interval = 3;
+
+export const video_encoder_codec = 'avc1.42E01E' /*'avc1.42001E'*/;
 
 export class HLS extends EventTarget {
     constructor(stream, base_url, ffmpeg_lib_url, frame_rate, rotate) {
@@ -54,7 +56,7 @@ export class HLS extends EventTarget {
             console.warn(ex);
             try {
                 // next try WebCodecs - this should work on Chrome including Android
-                this.webcodecs('avc1.42E01E' /*'avc1.42001E'*/,
+                this.webcodecs(video_encoder_codec,
                                'opus' /*'pcm'*/,
                                { avc: { format: 'annexb' } });
                 console.log("Using WebCodecs");

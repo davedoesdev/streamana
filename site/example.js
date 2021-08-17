@@ -1,6 +1,16 @@
 import { GlCanvas } from './gl-canvas.js';
-import { HLS } from './hls.js';
+import {
+    HLS,
+    video_encoder_codec,
+    videoBitsPerSecond
+} from './hls.js';
 import shader from './greyscale-shader.js';
+import {
+    supported_video_encoder_configs,
+    max_video_encoder_config,
+    min_camera_video_config,
+    max_camera_video_config
+} from './resolution.js';
 
 const ingestion_url_el = document.getElementById('ingestion-url');
 ingestion_url_el.value = localStorage.getItem('streamana-example-ingestion-url');
@@ -56,6 +66,42 @@ document.body.addEventListener('click', function (ev) {
             collapse.hide();
         }
     }
+});
+
+let preferred_resolution = localStorage.getItem('streamana-resolution');
+if (preferred_resolution) {
+    preferred_resolution = JSON.parse(preferred_resolution);
+} else {
+    preferred_resolution = {
+        width: 1280,
+        height: 720,
+        ratio: '16:9'
+    };
+}
+const resolution_el = document.getElementById('resolution');
+let video_encoder_config =  await max_video_encoder_config({
+    ...preferred_resolution,
+    codec: video_encoder_codec,
+    bitrate: videoBitsPerSecond
+});
+const video_encoder_configs = new Map();
+for (let config of await supported_video_encoder_configs({
+    codec: video_encoder_codec,
+    bitrate: videoBitsPerSecond
+})) {
+    const option = document.createElement('option');
+    option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
+    option.selected = config.label === video_encoder_config.label;
+    resolution_el.appendChild(option);
+    video_encoder_configs.set(option.innerText, config);
+}
+resolution_el.addEventListener('change', function (ev) {
+    video_encoder_config = video_encoder_configs.get(this.value);
+    localStorage.setItem('streamana-resolution', JSON.stringify({
+        width: video_encoder_config.width,
+        height: video_encoder_config.height,
+        ratio: video_encoder_config.ratio
+    }));
 });
 
 let hls;
@@ -150,29 +196,30 @@ async function start() {
         await video_el.play();
 
         // capture video from webcam
-        const video_constraints = {
-            //width: 4096,
-            //height: 2160,
-            width: 1280,
-            height: 720,
-            //width: 800,
-            //height: 600,
+        const camera_video_constraints = {
+            ratio: video_encoder_config.ratio,
+            width: video_encoder_config.width,
+            height: video_encoder_config.height,
             frameRate: {
                 ideal: 30,
                 max: 30
             }
         };
+
+        const camera_video_config = await min_camera_video_config(camera_video_constraints) ||
+                                    await max_camera_video_config(camera_video_constraints);
+
         try {
             camera_stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: video_constraints
+                video: camera_video_config
             });
         } catch (ex) {
             // retry in case audio isn't available
             console.warn("Failed to get user media, retrying without audio");
             camera_stream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
-                video: video_constraints
+                video: camera_video_config
             });
         }
 
