@@ -336,16 +336,8 @@ async function start() {
                             canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
                         }
                         // TODO:
-                        // a40 no buffers currently available in the reader queue
-                        // we need to detect what resolutions encoder will support
-                        //   and either capture at that resolution or can canvas downscale?
-                        //   canvas should already scale so we could set that as the maximum
-                        //   supported encoder resolution and let it scale
-                        //   or just use maximum common between camera and encoder
-                        //   - do this in webm-muxer.js as separate module
-                        //   get all the encoder resolutions and allow user to select one
-                        //   then choose next largest camera
                         // select which camera to use (front/rear)?
+                        // a40 no buffers currently available in the reader queue
                         // windows, android, iOS, find a mac to test
                         // check behaviour when rotate phone
                     }
