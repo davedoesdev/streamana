@@ -83,7 +83,9 @@ export class HLS extends EventTarget {
         recorder.onerror = onerror;
 
         recorder.onstop = () => {
-            this.receiver.end({ force: false });
+            if (this.receiver) {
+                this.receiver.end({ force: false });
+            }
         };
 
         // push encoded data into the ffmpeg worker

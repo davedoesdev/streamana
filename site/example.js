@@ -8,8 +8,6 @@ import shader from './greyscale-shader.js';
 import {
     supported_video_encoder_configs,
     max_video_encoder_config,
-    min_camera_video_config,
-    max_camera_video_config
 } from './resolution.js';
 
 const ingestion_url_el = document.getElementById('ingestion-url');
@@ -68,22 +66,25 @@ document.body.addEventListener('click', function (ev) {
     }
 });
 
+let video_encoder_config;
 let preferred_resolution = localStorage.getItem('streamana-resolution');
 if (preferred_resolution) {
-    preferred_resolution = JSON.parse(preferred_resolution);
-} else {
-    preferred_resolution = {
+    video_encoder_config = await max_video_encoder_config({
+        ...JSON.parse(preferred_resolution),
+        codec: video_encoder_codec,
+        bitrate: videoBitsPerSecond
+    });
+}
+if (!video_encoder_config) {
+    video_encoder_config =  await max_video_encoder_config({
         width: 1280,
         height: 720,
-        ratio: '16:9'
-    };
+        ratio: 16/9,
+        codec: video_encoder_codec,
+        bitrate: videoBitsPerSecond
+    });
 }
 const resolution_el = document.getElementById('resolution');
-let video_encoder_config =  await max_video_encoder_config({
-    ...preferred_resolution,
-    codec: video_encoder_codec,
-    bitrate: videoBitsPerSecond
-});
 const video_encoder_configs = new Map();
 for (let config of await supported_video_encoder_configs({
     codec: video_encoder_codec,
@@ -197,7 +198,7 @@ async function start() {
 
         // capture video from webcam
         const camera_video_constraints = {
-            ratio: video_encoder_config.ratio,
+            aspectRatio: video_encoder_config.ratio,
             width: video_encoder_config.width,
             height: video_encoder_config.height,
             frameRate: {
@@ -206,20 +207,17 @@ async function start() {
             }
         };
 
-        const camera_video_config = await min_camera_video_config(camera_video_constraints) ||
-                                    await max_camera_video_config(camera_video_constraints);
-
         try {
             camera_stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: camera_video_config
+                video: camera_video_constraints
             });
         } catch (ex) {
             // retry in case audio isn't available
             console.warn("Failed to get user media, retrying without audio");
             camera_stream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
-                video: camera_video_config
+                video: camera_video_constraints
             });
         }
 
@@ -243,6 +241,11 @@ async function start() {
         video_el.addEventListener('loadeddata', async function () {
             try {
                 console.log(`video width=${this.videoWidth} height=${this.videoHeight}`);
+                if ((this.videoWidth !== video_encoder_config.width) ||
+                    (this.videoHeight !== video_encoder_config.height)) {
+                    console.warn(`camera resolution ${this.videoWidth}x${this.videoHeight} is different to encoder resolution ${video_encoder_config.width}x${video_encoder_config.height}`);
+                }
+
                 // make canvas same size as native video dimensions so every pixel is seen
                 const portrait = this.videoWidth < this.videoHeight;
                 let zoom_portrait = false;
@@ -342,6 +345,7 @@ async function start() {
                         //   - do this in webm-muxer.js as separate module
                         //   get all the encoder resolutions and allow user to select one
                         //   then choose next largest camera
+                        // select which camera to use (front/rear)?
                         // windows, android, iOS, find a mac to test
                         // check behaviour when rotate phone
                     }
