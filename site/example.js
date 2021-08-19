@@ -363,7 +363,6 @@ async function start() {
                         canvas_el.style.width = `${width}px`;
                         canvas_el.style.height = `${height}px`;
                         // TODO:
-                        // should we vertically centre canvas?
                         // select which camera to use (front/rear)?
                         // a40 no buffers currently available in the reader queue
                         // windows, android, iOS, find a mac to test
