@@ -41,8 +41,8 @@
           <label for="lock-portrait" class="form-check-label">Lock portrait video</label>
         </div>
         <div class="form-check">
-          <input id="zoom-portrait" class="form-check-input" type="checkbox">
-          <label for="zoom-portrait" class="form-check-label">Zoom portrait video</label>
+          <input id="zoom-video" class="form-check-input" type="checkbox">
+          <label for="zoom-video" class="form-check-label">Display video without vertical bars</label>
         </div>
         <div class="pt-4">
           <label for="resolution" class="form-label">Encoder resolution</label>
@@ -54,7 +54,7 @@
       <strong>An error occurred!</strong> See the Developer Console for details.
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
-    <div class="position-relative overflow-hidden flex-grow-1 mx-auto">
+    <div class="position-relative overflow-hidden flex-grow-1 mx-auto d-flex align-items-center">
       <canvas id="canvas" class="mw-100 mh-100" playsinline></canvas>
       <div class="position-absolute top-50 start-50 translate-middle">
         <div id="waiting" class="text-primary spinner-border d-none" role="status">

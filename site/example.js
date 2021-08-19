@@ -41,18 +41,16 @@ ffmpeg_lib_url_el.addEventListener('input', function () {
     localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
 });
 
-const zoom_portrait_el = document.getElementById('zoom-portrait');
-zoom_portrait_el.checked = !!localStorage.getItem('streamana-zoom-portrait');
-zoom_portrait_el.addEventListener('input', function () {
-    localStorage.setItem('streamana-zoom-portrait', this.checked ? 'true' : '');
+const zoom_video_el = document.getElementById('zoom-video');
+zoom_video_el.checked = !!localStorage.getItem('streamana-zoom-video');
+zoom_video_el.addEventListener('input', function () {
+    localStorage.setItem('streamana-zoom-video', this.checked ? 'true' : '');
 });
 
 const lock_portrait_el = document.getElementById('lock-portrait');
 lock_portrait_el.checked = !!localStorage.getItem('streamana-lock-portrait');
-zoom_portrait_el.disabled = lock_portrait_el.checked;
 lock_portrait_el.addEventListener('input', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
-    zoom_portrait_el.disabled = this.checked;
 });
 
 document.body.addEventListener('click', function (ev) {
@@ -86,10 +84,10 @@ if (!video_encoder_config) {
 }
 const resolution_el = document.getElementById('resolution');
 const video_encoder_configs = new Map();
-for (let config of await supported_video_encoder_configs({
+for (let config of (await supported_video_encoder_configs({
     codec: video_encoder_codec,
     bitrate: videoBitsPerSecond
-})) {
+})).filter(c => c.ratio >= 1)) {
     const option = document.createElement('option');
     option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
     option.selected = config.label === video_encoder_config.label;
@@ -123,7 +121,7 @@ async function start() {
     ingestion_url_el.parentNode.classList.add('d-none');
     ffmpeg_lib_url_el.disabled = true;
     lock_portrait_el.disabled = true;
-    zoom_portrait_el.disabled = true;
+    zoom_video_el.disabled = true;
     waiting_el.classList.remove('d-none');
 
     canvas_el_parent.removeChild(canvas_el);
@@ -177,7 +175,7 @@ async function start() {
         ingestion_url_el.parentNode.classList.remove('d-none');
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
-        zoom_portrait_el.disabled = lock_portrait_el.checked;
+        zoom_video_el.disabled = lock_portrait_el.checked;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -198,9 +196,8 @@ async function start() {
 
         // capture video from webcam
         const camera_video_constraints = {
-            aspectRatio: video_encoder_config.ratio,
-            width: video_encoder_config.width,
-            height: video_encoder_config.height,
+            width: 4096,
+            height: 2160,
             frameRate: {
                 ideal: 30,
                 max: 30
@@ -240,49 +237,50 @@ async function start() {
         // registers a loadeddata handler which then registers a play handler)
         video_el.addEventListener('loadeddata', async function () {
             try {
-                console.log(`video width=${this.videoWidth} height=${this.videoHeight}`);
-                if ((this.videoWidth !== video_encoder_config.width) ||
-                    (this.videoHeight !== video_encoder_config.height)) {
-                    console.warn(`camera resolution ${this.videoWidth}x${this.videoHeight} is different to encoder resolution ${video_encoder_config.width}x${video_encoder_config.height}`);
+                console.log(`video resolution: ${this.videoWidth}x${this.videoHeight}`);
+                console.log(`encoder resolution: ${video_encoder_config.width}x${video_encoder_config.height}`);
+
+                // set aspect ratios of video and encoder
+                const ar_video = this.videoWidth / this.videoHeight;
+                const ar_encoder = video_encoder_config.ratio;
+
+                // set canvas dimensions to same as encoder so its gets all the output
+                canvas_el.width = video_encoder_config.width;
+                canvas_el.height = video_encoder_config.height;
+
+                // check whether we're locking portrait mode or zooming (display without bars)
+                let zoom_video = false;
+                const portrait = ar_video < 1;
+                if (portrait && lock_portrait_el.checked) {
+                    lock_portrait = true;
+                    // rotate the canvas
+                    canvas_el.classList.add('rotate');
+                    canvas_el.classList.remove('mw-100', 'mh-100');
+                    canvas_el_parent.classList.remove('mx-auto');
+
+                    // lock to portrait mode
+                    try {
+                        await screen.orientation.lock('portrait');
+                    } catch (ex) {
+                        if (ex.name === 'SecurityError') {
+                            if (!document.fullscreenElement) {
+                                await document.documentElement.requestFullscreen();
+                            }
+                            await screen.orientation.lock('portrait');
+                        } else if (ex.name !== 'NotSupportedError') {
+                            throw ex;
+                        }
+                    }
+                } else if (zoom_video_el.checked) {
+                    // we're going to remove the bars for local display only
+                    zoom_video = true;
+                    canvas_el.classList.add('zoom');
+                    canvas_el.classList.remove('mw-100', 'mh-100');
+                    canvas_el_parent.classList.remove('mx-auto');
                 }
 
-                // make canvas same size as native video dimensions so every pixel is seen
-                const portrait = video_encoder_config.width < video_encoder_config.height;
-                let zoom_portrait = false;
-                if (portrait) {
-                    if (lock_portrait_el.checked) {
-                        lock_portrait = true;
-                        canvas_el.classList.add('rotate');
-                        canvas_el.classList.remove('mw-100', 'mh-100');
-                        canvas_el_parent.classList.remove('mx-auto');
-                        try {
-                            await screen.orientation.lock('portrait');
-                        } catch (ex) {
-                            if (ex.name === 'SecurityError') {
-                                if (!document.fullscreenElement) {
-                                    await document.documentElement.requestFullscreen();
-                                }
-                                await screen.orientation.lock('portrait');
-                            } else if (ex.name !== 'NotSupportedError') {
-                                throw ex;
-                            }
-                        }
-                    } else if (zoom_portrait_el.checked) {
-                        zoom_portrait = true;
-                        canvas_el.classList.add('zoom');
-                        canvas_el.classList.remove('mw-100', 'mh-100');
-                        canvas_el_parent.classList.remove('mx-auto');
-                    }
-                    canvas_el.width = video_encoder_config.height;
-                    canvas_el.height = video_encoder_config.width;
-                } else {
-                    canvas_el.width = video_encoder_config.width;
-                    canvas_el.height = video_encoder_config.height;
-                }
+                // if we're locked to portrait mode, tell the shader to rotate the video
                 gl_canvas.setUniform('u_rotate', lock_portrait);
-                const ar_canvas = lock_portrait || zoom_portrait ?
-                        canvas_el.height / canvas_el.width :
-                        canvas_el.width / canvas_el.height;
 
                 // start the camera video
                 this.play();
@@ -314,28 +312,32 @@ async function start() {
                                 canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
                                 canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth}px`;
                             }
-                        } else if (zoom_portrait) {
-                            if (ar_parent >= ar_canvas) {
-                                // canvas_el.style.width = canvas_el_parent.offsetHeight * (1 / ar_canvas);  =>
-                                canvas_el.style.width = `${canvas_el_parent.offsetHeight / ar_canvas}px`;
-                                canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
+                        } else if (zoom_video) {
+                            if (ar_video < ar_encoder) {
+                                if (ar_parent >= ar_video) {
+                                    canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_encoder}px`;
+                                    canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
+                                } else {
+                                    canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width)}px`;
+                                    canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_video}px`;
+                                }
+                            } else if (ar_parent >= ar_video) {
+                                canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_video}px`;
+                                canvas_el.style.height = `${canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height)}px`;
                             } else {
-                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth / (canvas_el.height * ar_canvas / canvas_el.width);  =>
-                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * canvas_el.width / (canvas_el.height * ar_canvas)  =>
-                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (canvas_el.width / canvas_el.height) / ar_canvas  =>
-                                // canvas_el.style.width = canvas_el_parent.parentNode.offsetWidth * (1 / ar_canvas) / ar_canvas  =>
-                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas ** 2}px`;
-                                // canvas_el.style.height = canvas_el_parent.parentNode.offsetWidth / (1 / ar_canvas); =>
-                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth * ar_canvas}px`;
+                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth}px`;
+                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_encoder}px`;
                             }
-                        } else if (ar_parent >= ar_canvas) {
-                            canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_canvas}px`;
+                        } else if (ar_parent >= ar_encoder) {
+                            canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_encoder}px`;
                             canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
                         } else {
                             canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth}px`;
-                            canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
+                            canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_encoder}px`;
                         }
                         // TODO:
+                        // should we vertically centre canvas?
+                        //   test the portrait modes - does the centering affect them?
                         // select which camera to use (front/rear)?
                         // a40 no buffers currently available in the reader queue
                         // windows, android, iOS, find a mac to test
