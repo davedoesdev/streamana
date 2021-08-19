@@ -53,14 +53,18 @@ lock_portrait_el.addEventListener('input', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
 });
 
+function collapse_nav() {
+    const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
+    if (collapse) {
+        collapse.hide();
+    }
+}
+
 document.body.addEventListener('click', function (ev) {
     if ((ev.target === document.body) ||
         (ev.target === canvas_el_parent) ||
         (ev.target.parentNode === canvas_el_parent)) {
-        const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
-        if (collapse) {
-            collapse.hide();
-        }
+        collapse_nav();
     }
 });
 
@@ -124,6 +128,8 @@ async function start() {
     zoom_video_el.disabled = true;
     waiting_el.classList.remove('d-none');
 
+    collapse_nav();
+
     canvas_el_parent.removeChild(canvas_el);
     canvas_el = canvas_proto.cloneNode();
     canvas_el.classList.add('invisible');
@@ -175,7 +181,7 @@ async function start() {
         ingestion_url_el.parentNode.classList.remove('d-none');
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
-        zoom_video_el.disabled = lock_portrait_el.checked;
+        zoom_video_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -243,6 +249,7 @@ async function start() {
                 // set aspect ratios of video and encoder
                 const ar_video = this.videoWidth / this.videoHeight;
                 const ar_encoder = video_encoder_config.ratio;
+                const ar_encoder_inv = 1/ar_encoder;
 
                 // set canvas dimensions to same as encoder so its gets all the output
                 canvas_el.width = video_encoder_config.width;
@@ -302,39 +309,45 @@ async function start() {
                     if (gl_canvas.onLoop()) {
                         // Note: we need to use canvas_el_parent.parentNode.offsetWidth
                         // to take into account margins
+                        let width, height;
                         const ar_parent = canvas_el_parent.parentNode.offsetWidth /
                                           canvas_el_parent.offsetHeight;
                         if (lock_portrait) {
-                            if (ar_parent >= ar_canvas) {
-                                canvas_el.style.width = `${canvas_el_parent.offsetHeight}px`;
-                                canvas_el.style.height = `${canvas_el_parent.offsetHeight * ar_canvas}px`;
+                            if (zoom_video) {
+
+
+                            } else if (ar_parent >= ar_encoder_inv) {
+                                height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                                width = canvas_el_parent.offsetHeight;
                             } else {
-                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / ar_canvas}px`;
-                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth}px`;
+                                height = canvas_el_parent.parentNode.offsetWidth;
+                                width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
                             }
                         } else if (zoom_video) {
                             if (ar_video < ar_encoder) {
                                 if (ar_parent >= ar_video) {
-                                    canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_encoder}px`;
-                                    canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
+                                    width = canvas_el_parent.offsetHeight * ar_encoder;
+                                    height = canvas_el_parent.offsetHeight;
                                 } else {
-                                    canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width)}px`;
-                                    canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_video}px`;
+                                    width = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width);
+                                    height = canvas_el_parent.parentNode.offsetWidth / ar_video;
                                 }
                             } else if (ar_parent >= ar_video) {
-                                canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_video}px`;
-                                canvas_el.style.height = `${canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height)}px`;
+                                width = canvas_el_parent.offsetHeight * ar_video;
+                                height = canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height);
                             } else {
-                                canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth}px`;
-                                canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_encoder}px`;
+                                width = canvas_el_parent.parentNode.offsetWidth;
+                                height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
                             }
                         } else if (ar_parent >= ar_encoder) {
-                            canvas_el.style.width = `${canvas_el_parent.offsetHeight * ar_encoder}px`;
-                            canvas_el.style.height = `${canvas_el_parent.offsetHeight}px`;
+                            width = canvas_el_parent.offsetHeight * ar_encoder;
+                            height = canvas_el_parent.offsetHeight;
                         } else {
-                            canvas_el.style.width = `${canvas_el_parent.parentNode.offsetWidth}px`;
-                            canvas_el.style.height = `${canvas_el_parent.parentNode.offsetWidth / ar_encoder}px`;
+                            width = canvas_el_parent.parentNode.offsetWidth;
+                            height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
                         }
+                        canvas_el.style.width = `${width}px`;
+                        canvas_el.style.height = `${height}px`;
                         // TODO:
                         // should we vertically centre canvas?
                         //   test the portrait modes - does the centering affect them?
