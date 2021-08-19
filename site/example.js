@@ -126,6 +126,7 @@ async function start() {
     ffmpeg_lib_url_el.disabled = true;
     lock_portrait_el.disabled = true;
     zoom_video_el.disabled = true;
+    resolution_el.disabled = true;
     waiting_el.classList.remove('d-none');
 
     collapse_nav();
@@ -182,6 +183,7 @@ async function start() {
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
         zoom_video_el.disabled = false;
+        resolution_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -256,7 +258,7 @@ async function start() {
                 canvas_el.height = video_encoder_config.height;
 
                 // check whether we're locking portrait mode or zooming (display without bars)
-                let zoom_video = false;
+                let zoom_video = zoom_video_el.checked;
                 const portrait = ar_video < 1;
                 if (portrait && lock_portrait_el.checked) {
                     lock_portrait = true;
@@ -278,9 +280,8 @@ async function start() {
                             throw ex;
                         }
                     }
-                } else if (zoom_video_el.checked) {
+                } else if (zoom_video) {
                     // we're going to remove the bars for local display only
-                    zoom_video = true;
                     canvas_el.classList.add('zoom');
                     canvas_el.classList.remove('mw-100', 'mh-100');
                     canvas_el_parent.classList.remove('mx-auto');
@@ -314,8 +315,21 @@ async function start() {
                                           canvas_el_parent.offsetHeight;
                         if (lock_portrait) {
                             if (zoom_video) {
-
-
+                                if (ar_video < ar_encoder_inv) {
+                                    if (ar_parent >= ar_video) {
+                                        height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                                        width = canvas_el_parent.offsetHeight;
+                                    } else {
+                                        height = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.width * ar_video / video_encoder_config.height);
+                                        width = canvas_el_parent.parentNode.offsetWidth / ar_video;
+                                    }
+                                } else if (ar_parent >= ar_video) {
+                                    height = canvas_el_parent.offsetHeight * ar_video;
+                                    width = canvas_el_parent.offsetHeight / (video_encoder_config.height / ar_video / video_encoder_config.width);
+                                } else {
+                                    height = canvas_el_parent.parentNode.offsetWidth;
+                                    width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
+                                }
                             } else if (ar_parent >= ar_encoder_inv) {
                                 height = canvas_el_parent.offsetHeight * ar_encoder_inv;
                                 width = canvas_el_parent.offsetHeight;
@@ -350,7 +364,6 @@ async function start() {
                         canvas_el.style.height = `${height}px`;
                         // TODO:
                         // should we vertically centre canvas?
-                        //   test the portrait modes - does the centering affect them?
                         // select which camera to use (front/rear)?
                         // a40 no buffers currently available in the reader queue
                         // windows, android, iOS, find a mac to test
