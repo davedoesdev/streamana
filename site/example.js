@@ -53,6 +53,8 @@ lock_portrait_el.addEventListener('input', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
 });
 
+let facing_mode = localStorage.getItem('streamana-facing-mode') || 'user';
+
 function collapse_nav() {
     const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
     if (collapse) {
@@ -106,6 +108,8 @@ resolution_el.addEventListener('change', function (ev) {
         ratio: video_encoder_config.ratio
     }));
 });
+
+const camera_swap_el = document.getElementById('camera-swap');
 
 let hls;
 
@@ -186,6 +190,7 @@ async function start() {
         resolution_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
+        camera_swap_el.classList.add('d-none');
     }
 
     try {
@@ -204,12 +209,13 @@ async function start() {
 
         // capture video from webcam
         const camera_video_constraints = {
-            width: 4096,
-            height: 2160,
+            width: video_encoder_config.width,
+            height: video_encoder_config.height,
             frameRate: {
                 ideal: 30,
                 max: 30
-            }
+            },
+            facingMode: facing_mode
         };
 
         try {
@@ -225,6 +231,10 @@ async function start() {
                 video: camera_video_constraints
             });
         }
+
+        const video_settings = camera_stream.getVideoTracks()[0].getSettings();
+        facing_mode = video_settings.facingMode || 'user';
+        localStorage.setItem('streamana-facing-mode', facing_mode);
 
         canvas_el.addEventListener('webglcontextlost', cleanup);
 
@@ -249,7 +259,6 @@ async function start() {
                 console.log(`encoder resolution: ${video_encoder_config.width}x${video_encoder_config.height}`);
 
                 // set aspect ratios of video and encoder
-                const ar_video = this.videoWidth / this.videoHeight;
                 const ar_encoder = video_encoder_config.ratio;
                 const ar_encoder_inv = 1/ar_encoder;
 
@@ -259,8 +268,7 @@ async function start() {
 
                 // check whether we're locking portrait mode or zooming (display without bars)
                 let zoom_video = zoom_video_el.checked;
-                const portrait = ar_video < 1;
-                if (portrait && lock_portrait_el.checked) {
+                if ((this.videoWidth < this.videoHeight) && lock_portrait_el.checked) {
                     lock_portrait = true;
                     // rotate the canvas
                     canvas_el.classList.add('rotate');
@@ -296,7 +304,7 @@ async function start() {
                 // capture video from the canvas
                 // Note: Safari on iOS doesn't get any data, might be related to
                 // https://bugs.webkit.org/show_bug.cgi?id=181663
-                const frame_rate = camera_stream.getVideoTracks()[0].getSettings().frameRate;
+                const frame_rate = video_settings.frameRate;
                 canvas_stream = canvas_el.captureStream(frame_rate);
 
                 // add audio if present
@@ -305,9 +313,11 @@ async function start() {
                     canvas_stream.addTrack(audio_tracks[0]);
                 }
 
-                function update() {
+                const update = () => {
                     // update the canvas
                     if (gl_canvas.onLoop()) {
+                        const ar_video = this.videoWidth / this.videoHeight;
+
                         // Note: we need to use canvas_el_parent.parentNode.offsetWidth
                         // to take into account margins
                         let width, height;
@@ -364,11 +374,18 @@ async function start() {
                         canvas_el.style.height = `${height}px`;
                         // TODO:
                         // select which camera to use (front/rear)?
+                        //   have an icon which click to swap between user and environment
+                        //   we'll need to close the camera stream and start it again
+                        //   but leave the canvas going
+                        // check behaviour when rotate phone
+                        //   chrome bug when rotate (sometimes half page doesn't render)
+                        // chrome inspect not working
+                        // allow select audio and video devices
+                        // performance on mobile
                         // a40 no buffers currently available in the reader queue
                         // windows, android, iOS, find a mac to test
-                        // check behaviour when rotate phone
                     }
-                }
+                };
 
                 // start HLS from the canvas stream to the ingestion URL
                 hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate, lock_portrait);
@@ -388,6 +405,7 @@ async function start() {
                         this.end(true);
                     }
                     waiting_el.classList.add('d-none');
+                    camera_swap_el.classList.remove('d-none');
                     canvas_el.classList.remove('invisible');
                     go_live_el.disabled = false;
                     update();
