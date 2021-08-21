@@ -6,6 +6,8 @@ const { Canvas } = await importUMD('./glsl-canvas.min.js');
 export class GlCanvas extends Canvas {
     constructor(canvas_el, options) {
         super(new Proxy(canvas_el, {
+            // because it's not visible, client dimensions are zero so we
+            // need to substitute actual dimensions instead
             get: (target, name, receiver) => {
                 if (name === 'getBoundingClientRect') {
                   return () => new DOMRect(0, 0, target.width, target.height);

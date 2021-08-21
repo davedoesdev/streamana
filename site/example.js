@@ -10,6 +10,8 @@ import {
     max_video_encoder_config,
 } from './resolution.js';
 
+const target_frame_rate = 30;
+
 const ingestion_url_el = document.getElementById('ingestion-url');
 ingestion_url_el.value = localStorage.getItem('streamana-example-ingestion-url');
 
@@ -144,7 +146,15 @@ async function start() {
         error_alert_el_parent.removeChild(error_alert_el);
     }
 
-    let camera_stream, gl_canvas, canvas_stream, lock_portrait = false, done = false;
+    // get aspect ratio of encoder
+    console.log(`encoder resolution: ${video_encoder_config.width}x${video_encoder_config.height}`);
+    const ar_encoder = video_encoder_config.ratio;
+    const ar_encoder_inv = 1/ar_encoder;
+
+    const zoom_video = zoom_video_el.checked;
+    const lock_portrait = screen.orientation.type.startsWith('portrait') && lock_portrait_el.checked;
+    let video_el, gl_canvas, canvas_stream, camera_stream, done = false;
+
     function cleanup(err) {
         if (err) {
             console.error(err);
@@ -193,11 +203,87 @@ async function start() {
         camera_swap_el.classList.add('d-none');
     }
 
+    function update() {
+        // update the canvas
+        if (gl_canvas.onLoop()) {
+            // get aspect ratio of video
+            const ar_video = video_el.videoWidth / video_el.videoHeight;
+
+            // Note: we need to use canvas_el_parent.parentNode.offsetWidth
+            // to take into account margins
+            let width, height;
+            const ar_parent = canvas_el_parent.parentNode.offsetWidth /
+                              canvas_el_parent.offsetHeight;
+            if (lock_portrait) {
+                if (zoom_video) {
+                    if (ar_video < ar_encoder_inv) {
+                        if (ar_parent >= ar_video) {
+                            height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                            width = canvas_el_parent.offsetHeight;
+                        } else {
+                            height = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.width * ar_video / video_encoder_config.height);
+                            width = canvas_el_parent.parentNode.offsetWidth / ar_video;
+                        }
+                    } else if (ar_parent >= ar_video) {
+                        height = canvas_el_parent.offsetHeight * ar_video;
+                        width = canvas_el_parent.offsetHeight / (video_encoder_config.height / ar_video / video_encoder_config.width);
+                    } else {
+                        height = canvas_el_parent.parentNode.offsetWidth;
+                        width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
+                    }
+                } else if (ar_parent >= ar_encoder_inv) {
+                    height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                    width = canvas_el_parent.offsetHeight;
+                } else {
+                    height = canvas_el_parent.parentNode.offsetWidth;
+                    width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
+                }
+            } else if (zoom_video) {
+                if (ar_video < ar_encoder) {
+                    if (ar_parent >= ar_video) {
+                        width = canvas_el_parent.offsetHeight * ar_encoder;
+                        height = canvas_el_parent.offsetHeight;
+                    } else {
+                        width = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width);
+                        height = canvas_el_parent.parentNode.offsetWidth / ar_video;
+                    }
+                } else if (ar_parent >= ar_video) {
+                    width = canvas_el_parent.offsetHeight * ar_video;
+                    height = canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height);
+                } else {
+                    width = canvas_el_parent.parentNode.offsetWidth;
+                    height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
+                }
+            } else if (ar_parent >= ar_encoder) {
+                width = canvas_el_parent.offsetHeight * ar_encoder;
+                height = canvas_el_parent.offsetHeight;
+            } else {
+                width = canvas_el_parent.parentNode.offsetWidth;
+                height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
+            }
+            canvas_el.style.width = `${width}px`;
+            canvas_el.style.height = `${height}px`;
+            // TODO:
+            // select which camera to use (front/rear)?
+            //   have an icon which click to swap between user and environment
+            //   we'll need to close the camera stream and start it again
+            //   but leave the canvas going
+            // check behaviour when rotate phone
+            //   chrome bug when rotate (sometimes half page doesn't render)
+            // chrome inspect not working
+            // allow select audio and video devices
+            //   will need an audio element for "indirection"
+            // performance on mobile
+            // a40 no buffers currently available in the reader queue
+            // windows, android, iOS, find a mac to test
+        }
+    }
+
     try {
         // create video element which will be used for grabbing the frames to
         // write to a canvas so we can apply webgl shaders
         // also used to get the native video dimensions
-        const video_el = document.createElement('video');
+        video_el = document.createElement('video');
         video_el.muted = true;
         video_el.playsInline = true;
 
@@ -207,13 +293,93 @@ async function start() {
         video_el.src = 'empty.mp4';
         await video_el.play();
 
+        canvas_el.addEventListener('webglcontextlost', cleanup);
+
+        // set canvas dimensions to same as encoder so its gets all the output
+        canvas_el.width = video_encoder_config.width;
+        canvas_el.height = video_encoder_config.height;
+
+        // use glsl-canvas to make managing webgl stuff easier
+        gl_canvas = new GlCanvas(canvas_el, {
+            // as an example, greyscale the stream
+            fragmentString: shader
+        });
+
+        gl_canvas.on('error', cleanup);
+
+        // tell canvas to use frames from video
+        gl_canvas.setTexture('u_texture', video_el);
+
+        // check whether we're locking portrait mode or zooming (display without bars)
+        if (lock_portrait) {
+            // rotate the canvas
+            canvas_el.classList.add('rotate');
+            canvas_el.classList.remove('mw-100', 'mh-100');
+            canvas_el_parent.classList.remove('mx-auto');
+
+            // lock to portrait mode
+            try {
+                await screen.orientation.lock('portrait');
+            } catch (ex) {
+                if (ex.name === 'SecurityError') {
+                    if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                    }
+                    await screen.orientation.lock('portrait');
+                } else if (ex.name !== 'NotSupportedError') {
+                    throw ex;
+                }
+            }
+        } else if (zoom_video) {
+            // we're going to remove the bars for local display only
+            canvas_el.classList.add('zoom');
+            canvas_el.classList.remove('mw-100', 'mh-100');
+            canvas_el_parent.classList.remove('mx-auto');
+        }
+
+        // if we're locked to portrait mode, tell the shader to rotate the video
+        gl_canvas.setUniform('u_rotate', lock_portrait);
+
+        // capture video from the canvas
+        // Note: Safari on iOS doesn't get any data, might be related to
+        // https://bugs.webkit.org/show_bug.cgi?id=181663
+        //const frame_rate = video_settings.frameRate;
+        canvas_stream = canvas_el.captureStream(target_frame_rate);
+
+        // HLS from the canvas stream to the ingestion URL
+        hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
+        hls.addEventListener('run', () => console.log('HLS running'));
+        hls.addEventListener('exit', ev => {
+            const msg = `HLS exited with status ${ev.detail.code}`;
+            if (ev.detail.code === 0) {
+                console.log(msg);
+                cleanup();
+            } else {
+                cleanup(msg);
+            }
+        });
+        hls.addEventListener('error', cleanup);
+        hls.addEventListener('start', function () {
+            if (done) {
+                this.end(true);
+            }
+            waiting_el.classList.add('d-none');
+            if (!lock_portrait) {
+                camera_swap_el.classList.remove('d-none');
+            }
+            canvas_el.classList.remove('invisible');
+            go_live_el.disabled = false;
+            update();
+        });
+        hls.addEventListener('update', update);
+
         // capture video from webcam
         const camera_video_constraints = {
             width: video_encoder_config.width,
             height: video_encoder_config.height,
             frameRate: {
-                ideal: 30,
-                max: 30
+                ideal: target_frame_rate,
+                max: target_frame_rate
             },
             facingMode: facing_mode
         };
@@ -236,76 +402,14 @@ async function start() {
         facing_mode = video_settings.facingMode || 'user';
         localStorage.setItem('streamana-facing-mode', facing_mode);
 
-        canvas_el.addEventListener('webglcontextlost', cleanup);
-
-        // use glsl-canvas to make managing webgl stuff easier
-        // because it's not visible, client dimensions are zero so we
-        // need to substitute actual dimensions instead
-        gl_canvas = new GlCanvas(canvas_el, {
-            // as an example, greyscale the stream
-            fragmentString: shader
-        });
-
-        gl_canvas.on('error', cleanup);
-
-        // tell canvas to use frames from video
-        gl_canvas.setTexture('u_texture', video_el);
-
         // wait for video to load (must come after gl_canvas.setTexture() since it
         // registers a loadeddata handler which then registers a play handler)
         video_el.addEventListener('loadeddata', async function () {
             try {
                 console.log(`video resolution: ${this.videoWidth}x${this.videoHeight}`);
-                console.log(`encoder resolution: ${video_encoder_config.width}x${video_encoder_config.height}`);
-
-                // set aspect ratios of video and encoder
-                const ar_encoder = video_encoder_config.ratio;
-                const ar_encoder_inv = 1/ar_encoder;
-
-                // set canvas dimensions to same as encoder so its gets all the output
-                canvas_el.width = video_encoder_config.width;
-                canvas_el.height = video_encoder_config.height;
-
-                // check whether we're locking portrait mode or zooming (display without bars)
-                let zoom_video = zoom_video_el.checked;
-                if ((this.videoWidth < this.videoHeight) && lock_portrait_el.checked) {
-                    lock_portrait = true;
-                    // rotate the canvas
-                    canvas_el.classList.add('rotate');
-                    canvas_el.classList.remove('mw-100', 'mh-100');
-                    canvas_el_parent.classList.remove('mx-auto');
-
-                    // lock to portrait mode
-                    try {
-                        await screen.orientation.lock('portrait');
-                    } catch (ex) {
-                        if (ex.name === 'SecurityError') {
-                            if (!document.fullscreenElement) {
-                                await document.documentElement.requestFullscreen();
-                            }
-                            await screen.orientation.lock('portrait');
-                        } else if (ex.name !== 'NotSupportedError') {
-                            throw ex;
-                        }
-                    }
-                } else if (zoom_video) {
-                    // we're going to remove the bars for local display only
-                    canvas_el.classList.add('zoom');
-                    canvas_el.classList.remove('mw-100', 'mh-100');
-                    canvas_el_parent.classList.remove('mx-auto');
-                }
-
-                // if we're locked to portrait mode, tell the shader to rotate the video
-                gl_canvas.setUniform('u_rotate', lock_portrait);
 
                 // start the camera video
                 this.play();
-
-                // capture video from the canvas
-                // Note: Safari on iOS doesn't get any data, might be related to
-                // https://bugs.webkit.org/show_bug.cgi?id=181663
-                const frame_rate = video_settings.frameRate;
-                canvas_stream = canvas_el.captureStream(frame_rate);
 
                 // add audio if present
                 const audio_tracks = camera_stream.getAudioTracks();
@@ -313,104 +417,6 @@ async function start() {
                     canvas_stream.addTrack(audio_tracks[0]);
                 }
 
-                const update = () => {
-                    // update the canvas
-                    if (gl_canvas.onLoop()) {
-                        const ar_video = this.videoWidth / this.videoHeight;
-
-                        // Note: we need to use canvas_el_parent.parentNode.offsetWidth
-                        // to take into account margins
-                        let width, height;
-                        const ar_parent = canvas_el_parent.parentNode.offsetWidth /
-                                          canvas_el_parent.offsetHeight;
-                        if (lock_portrait) {
-                            if (zoom_video) {
-                                if (ar_video < ar_encoder_inv) {
-                                    if (ar_parent >= ar_video) {
-                                        height = canvas_el_parent.offsetHeight * ar_encoder_inv;
-                                        width = canvas_el_parent.offsetHeight;
-                                    } else {
-                                        height = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.width * ar_video / video_encoder_config.height);
-                                        width = canvas_el_parent.parentNode.offsetWidth / ar_video;
-                                    }
-                                } else if (ar_parent >= ar_video) {
-                                    height = canvas_el_parent.offsetHeight * ar_video;
-                                    width = canvas_el_parent.offsetHeight / (video_encoder_config.height / ar_video / video_encoder_config.width);
-                                } else {
-                                    height = canvas_el_parent.parentNode.offsetWidth;
-                                    width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
-                                }
-                            } else if (ar_parent >= ar_encoder_inv) {
-                                height = canvas_el_parent.offsetHeight * ar_encoder_inv;
-                                width = canvas_el_parent.offsetHeight;
-                            } else {
-                                height = canvas_el_parent.parentNode.offsetWidth;
-                                width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
-                            }
-                        } else if (zoom_video) {
-                            if (ar_video < ar_encoder) {
-                                if (ar_parent >= ar_video) {
-                                    width = canvas_el_parent.offsetHeight * ar_encoder;
-                                    height = canvas_el_parent.offsetHeight;
-                                } else {
-                                    width = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width);
-                                    height = canvas_el_parent.parentNode.offsetWidth / ar_video;
-                                }
-                            } else if (ar_parent >= ar_video) {
-                                width = canvas_el_parent.offsetHeight * ar_video;
-                                height = canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height);
-                            } else {
-                                width = canvas_el_parent.parentNode.offsetWidth;
-                                height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
-                            }
-                        } else if (ar_parent >= ar_encoder) {
-                            width = canvas_el_parent.offsetHeight * ar_encoder;
-                            height = canvas_el_parent.offsetHeight;
-                        } else {
-                            width = canvas_el_parent.parentNode.offsetWidth;
-                            height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
-                        }
-                        canvas_el.style.width = `${width}px`;
-                        canvas_el.style.height = `${height}px`;
-                        // TODO:
-                        // select which camera to use (front/rear)?
-                        //   have an icon which click to swap between user and environment
-                        //   we'll need to close the camera stream and start it again
-                        //   but leave the canvas going
-                        // check behaviour when rotate phone
-                        //   chrome bug when rotate (sometimes half page doesn't render)
-                        // chrome inspect not working
-                        // allow select audio and video devices
-                        // performance on mobile
-                        // a40 no buffers currently available in the reader queue
-                        // windows, android, iOS, find a mac to test
-                    }
-                };
-
-                // start HLS from the canvas stream to the ingestion URL
-                hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, frame_rate, lock_portrait);
-                hls.addEventListener('run', () => console.log('HLS running'));
-                hls.addEventListener('exit', ev => {
-                    const msg = `HLS exited with status ${ev.detail.code}`;
-                    if (ev.detail.code === 0) {
-                        console.log(msg);
-                        cleanup();
-                    } else {
-                        cleanup(msg);
-                    }
-                });
-                hls.addEventListener('error', cleanup);
-                hls.addEventListener('start', function () {
-                    if (done) {
-                        this.end(true);
-                    }
-                    waiting_el.classList.add('d-none');
-                    camera_swap_el.classList.remove('d-none');
-                    canvas_el.classList.remove('invisible');
-                    go_live_el.disabled = false;
-                    update();
-                });
-                hls.addEventListener('update', update);
                 await hls.start();
             } catch (ex) {
                 cleanup(ex);

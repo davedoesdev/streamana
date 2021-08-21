@@ -21,9 +21,14 @@ export class HLS extends EventTarget {
         }
         this.update_event = new CustomEvent('update');
         this.sending = false;
+        this.started = false;
     }
 
     async start() {
+        if (this.started) {
+            return;
+        }
+
         // if audio isn't present, add a silent track
         if (this.stream.getAudioTracks().length === 0) {
             console.warn("No audio present, adding silence");
@@ -68,6 +73,8 @@ export class HLS extends EventTarget {
                 console.log("Using MediaRecorder MP4");
             }
         }
+
+        this.started = true;
     }
 
     async media_recorder(mimeType) {
