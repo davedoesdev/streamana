@@ -163,6 +163,8 @@ async function start() {
             return;
         }
         done = true;
+        camera_swap_el.classList.add('d-none');
+        camera_swap_el.removeEventListener('click', about_face);
         canvas_el_parent.classList.add('mx-auto');
         if (lock_portrait) {
             screen.orientation.unlock();
@@ -200,12 +202,13 @@ async function start() {
         resolution_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
-        camera_swap_el.classList.add('d-none');
     }
 
     function update() {
         // update the canvas
-        if (gl_canvas.onLoop()) {
+        if ((video_el.videoWidth > 0) &&
+            (video_el.videoHeight > 0) &&
+            gl_canvas.onLoop()) {
             // get aspect ratio of video
             const ar_video = video_el.videoWidth / video_el.videoHeight;
 
@@ -264,19 +267,97 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // select which camera to use (front/rear)?
-            //   have an icon which click to swap between user and environment
-            //   we'll need to close the camera stream and start it again
-            //   but leave the canvas going
-            // check behaviour when rotate phone
-            //   chrome bug when rotate (sometimes half page doesn't render)
             // chrome inspect not working
+            // select which camera to use (front/rear)?
+            //   test fix for going small while rotating
+            //   option to switch audio as well
             // allow select audio and video devices
             //   will need an audio element for "indirection"
+            // mute option                +
+            // hide camera option         |<- these input list along with audio and video devices?
+            // audio/video source option  +
+            // option to mix in >1 audio?
+            // scheduling (e.g. pre-roll)?
+            // loop? (e.g. off-air image or video loop?)
+            // check behaviour when rotate phone
+            //   chrome bug when rotate (sometimes half page doesn't render)
             // performance on mobile
             // a40 no buffers currently available in the reader queue
             // windows, android, iOS, find a mac to test
         }
+    }
+
+    async function start_camera(requested_facing_mode) {
+        const camera_video_constraints = {
+            width: video_encoder_config.width,
+            height: video_encoder_config.height,
+            frameRate: {
+                ideal: target_frame_rate,
+                max: target_frame_rate
+            },
+            facingMode: requested_facing_mode
+        };
+
+        const need_audio = canvas_stream.getAudioTracks().length === 0;
+
+        try {
+            camera_stream = await navigator.mediaDevices.getUserMedia({
+                audio: need_audio,
+                video: camera_video_constraints
+            });
+        } catch (ex) {
+            if (!need_audio) {
+                throw ex;
+            }
+            // retry in case audio isn't available
+            console.warn("Failed to get user media, retrying without audio");
+            camera_stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: camera_video_constraints
+            });
+        }
+
+        const video_settings = camera_stream.getVideoTracks()[0].getSettings();
+        facing_mode = video_settings.facingMode || 'user';
+        localStorage.setItem('streamana-facing-mode', facing_mode);
+
+        // wait for video to load (must come after gl_canvas.setTexture() since it
+        // registers a loadeddata handler which then registers a play handler)
+        video_el.addEventListener('loadeddata', async function () {
+            try {
+                console.log(`video resolution: ${this.videoWidth}x${this.videoHeight}`);
+
+                // start the camera video
+                this.play();
+
+                // add audio if present
+                const audio_tracks = camera_stream.getAudioTracks();
+                if (need_audio && (audio_tracks.length > 0)) {
+                    canvas_stream.addTrack(audio_tracks[0]);
+                }
+
+                await hls.start();
+
+                camera_swap_el.addEventListener('click', about_face);
+            } catch (ex) {
+                cleanup(ex);
+            }
+        }, { once: true });
+
+        // pass the stream from the camera to the video so it can render the frames
+        video_el.srcObject = camera_stream;
+    }
+
+    function about_face() {
+        camera_swap_el.removeEventListener('click', about_face);
+
+        if (camera_stream) {
+            for (let track of camera_stream.getVideoTracks()) {
+                track.stop();
+            }
+        }
+
+        start_camera(facing_mode == 'user' ? 'environment' : 'user');
     }
 
     try {
@@ -373,58 +454,7 @@ async function start() {
         });
         hls.addEventListener('update', update);
 
-        // capture video from webcam
-        const camera_video_constraints = {
-            width: video_encoder_config.width,
-            height: video_encoder_config.height,
-            frameRate: {
-                ideal: target_frame_rate,
-                max: target_frame_rate
-            },
-            facingMode: facing_mode
-        };
-
-        try {
-            camera_stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: camera_video_constraints
-            });
-        } catch (ex) {
-            // retry in case audio isn't available
-            console.warn("Failed to get user media, retrying without audio");
-            camera_stream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: camera_video_constraints
-            });
-        }
-
-        const video_settings = camera_stream.getVideoTracks()[0].getSettings();
-        facing_mode = video_settings.facingMode || 'user';
-        localStorage.setItem('streamana-facing-mode', facing_mode);
-
-        // wait for video to load (must come after gl_canvas.setTexture() since it
-        // registers a loadeddata handler which then registers a play handler)
-        video_el.addEventListener('loadeddata', async function () {
-            try {
-                console.log(`video resolution: ${this.videoWidth}x${this.videoHeight}`);
-
-                // start the camera video
-                this.play();
-
-                // add audio if present
-                const audio_tracks = camera_stream.getAudioTracks();
-                if (audio_tracks.length > 0) {
-                    canvas_stream.addTrack(audio_tracks[0]);
-                }
-
-                await hls.start();
-            } catch (ex) {
-                cleanup(ex);
-            }
-        });
-
-        // pass the stream from the camera to the video so it can render the frames
-        video_el.srcObject = camera_stream;
+        await start_camera(facing_mode);
     } catch (ex) {
         return cleanup(ex);
     }
