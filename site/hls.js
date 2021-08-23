@@ -29,30 +29,6 @@ export class HLS extends EventTarget {
             return;
         }
 
-        // if audio isn't present, add a silent track
-        if (this.stream.getAudioTracks().length === 0) {
-            console.warn("No audio present, adding silence");
-            const context = new AudioContext();
-            // Note: createBufferSource is supposed to be used
-            // to create silence but it doesn't keep the page active
-            // if it's hidden. Use createConstantSource instead.
-            // Since this is a constant value, it won't generate
-            // something that changes (such as a sine or sawtooth
-            // waveform) and so is inaudible. This passes the
-            // browser's silence detection, which must just check
-            // for zero values.
-            // Note: WebAudio destination stream output is bugged
-            // on Safari:
-            // https://bugs.webkit.org/show_bug.cgi?id=173863
-            // https://bugs.webkit.org/show_bug.cgi?id=198284
-            //const silence = context.createBufferSource();
-            const silence = context.createConstantSource();
-            const dest = context.createMediaStreamDestination();
-            silence.connect(dest);
-            silence.start();
-            this.stream.addTrack(dest.stream.getAudioTracks()[0]);
-        }
-
         try {
             // first try WebM/H264 MediaRecorder - this should work on Chrome Linux and Windows
             await this.media_recorder('video/webm;codecs=H264');

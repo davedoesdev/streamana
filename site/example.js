@@ -57,6 +57,12 @@ lock_portrait_el.addEventListener('input', function () {
 
 let facing_mode = localStorage.getItem('streamana-facing-mode') || 'user';
 
+const reset_audio_el = document.getElementById('reset-audio');
+reset_audio_el.checked = !!localStorage.getItem('streamana-reset-audio');
+reset_audio_el.addEventListener('change', function () {
+    localStorage.setItem('streamana-reset-audio', this.checked ? 'true' : '');
+});
+
 function collapse_nav() {
     const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
     if (collapse) {
@@ -132,6 +138,7 @@ async function start() {
     ffmpeg_lib_url_el.disabled = true;
     lock_portrait_el.disabled = true;
     zoom_video_el.disabled = true;
+    reset_audio_el.disabled = true;
     resolution_el.disabled = true;
     waiting_el.classList.remove('d-none');
 
@@ -153,7 +160,7 @@ async function start() {
 
     const zoom_video = zoom_video_el.checked;
     const lock_portrait = screen.orientation.type.startsWith('portrait') && lock_portrait_el.checked;
-    let video_el, gl_canvas, canvas_stream, camera_stream, done = false;
+    let video_el, audio_source, audio_dest, gl_canvas, canvas_stream, camera_stream, done = false;
 
     function cleanup(err) {
         if (err) {
@@ -199,6 +206,7 @@ async function start() {
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
         zoom_video_el.disabled = false;
+        reset_audio_el.disabled = false;
         resolution_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
@@ -271,8 +279,8 @@ async function start() {
             // select which camera to use (front/rear)?
             //   test fix for going small while rotating
             //   option to switch audio as well
+            //     audio source has two channels even though media stream is mono - check what's recorded
             // allow select audio and video devices
-            //   will need an audio element for "indirection"
             // mute option                +
             // hide camera option         |<- these input list along with audio and video devices?
             // audio/video source option  +
@@ -298,15 +306,13 @@ async function start() {
             facingMode: requested_facing_mode
         };
 
-        const need_audio = canvas_stream.getAudioTracks().length === 0;
-
         try {
             camera_stream = await navigator.mediaDevices.getUserMedia({
-                audio: need_audio,
+                audio: !audio_source,
                 video: camera_video_constraints
             });
         } catch (ex) {
-            if (!need_audio) {
+            if (audio_source) {
                 throw ex;
             }
             // retry in case audio isn't available
@@ -330,10 +336,26 @@ async function start() {
                 // start the camera video
                 this.play();
 
-                // add audio if present
-                const audio_tracks = camera_stream.getAudioTracks();
-                if (need_audio && (audio_tracks.length > 0)) {
-                    canvas_stream.addTrack(audio_tracks[0]);
+                if (!audio_source) {
+                    if (camera_stream.getAudioTracks().length > 0) {
+                        // add audio if present
+                        audio_source = audio_dest.context.createMediaStreamSource(camera_stream);
+                    } else {
+                        console.warn("No audio present, adding silence");
+                        // Note: createBufferSource is supposed to be used to create silence
+                        // but it doesn't keep the page active if it's hidden.
+                        // Use createConstantSource instead. Since this is a constant value,
+                        // it won't generate something that changes (such as a sine or sawtooth
+                        // waveform) and so is inaudible. This passes the browser's silence
+                        // detection, which must just check for zero values.
+                        // Note: WebAudio destination stream output is bugged on Safari:
+                        // https://bugs.webkit.org/show_bug.cgi?id=173863
+                        // https://bugs.webkit.org/show_bug.cgi?id=198284
+                        //const silence = audio_dest.context.createBufferSource();
+                        audio_source = audio_dest.context.createConstantSource();
+                        audio_source.start();
+                    }
+                    audio_source.connect(audio_dest);
                 }
 
                 await hls.start();
@@ -354,6 +376,13 @@ async function start() {
         if (camera_stream) {
             for (let track of camera_stream.getVideoTracks()) {
                 track.stop();
+            }
+            if (reset_audio_el.checked) {
+                for (let track of camera_stream.getAudioTracks()) {
+                    track.stop();
+                }
+                audio_source.disconnect();
+                audio_source = null;
             }
         }
 
@@ -426,6 +455,10 @@ async function start() {
         // https://bugs.webkit.org/show_bug.cgi?id=181663
         //const frame_rate = video_settings.frameRate;
         canvas_stream = canvas_el.captureStream(target_frame_rate);
+
+        // add audio to canvas stream
+        audio_dest = new AudioContext().createMediaStreamDestination();
+        canvas_stream.addTrack(audio_dest.stream.getAudioTracks()[0]);
 
         // HLS from the canvas stream to the ingestion URL
         hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
