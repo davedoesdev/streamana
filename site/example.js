@@ -160,7 +160,7 @@ async function start() {
 
     const zoom_video = zoom_video_el.checked;
     const lock_portrait = screen.orientation.type.startsWith('portrait') && lock_portrait_el.checked;
-    let video_el, audio_source, audio_dest, gl_canvas, canvas_stream, camera_stream, done = false;
+    let video_el, silence, audio_source, audio_dest, gl_canvas, canvas_stream, camera_stream, done = false;
 
     function cleanup(err) {
         if (err) {
@@ -182,6 +182,12 @@ async function start() {
         if (err) {
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
             error_alert_el.classList.add('show');
+        }
+        if (audio_source) {
+            audio_source.disconnect();
+        }
+        if (silence) {
+            silence.stop();
         }
         if (camera_stream) {
             for (let track of camera_stream.getTracks()) {
@@ -277,7 +283,7 @@ async function start() {
             // TODO:
             // chrome inspect not working
             // select which camera to use (front/rear)?
-            //   test fix for going small while rotating
+            //   test fix for going small while rotating (switching?)
             //   option to switch audio as well
             //     audio source has two channels even though media stream is mono - check what's recorded
             // allow select audio and video devices
@@ -285,6 +291,7 @@ async function start() {
             // hide camera option         |<- these input list along with audio and video devices?
             // audio/video source option  +
             // option to mix in >1 audio?
+            // allow audio streaming only
             // scheduling (e.g. pre-roll)?
             // loop? (e.g. off-air image or video loop?)
             // check behaviour when rotate phone
@@ -308,11 +315,11 @@ async function start() {
 
         try {
             camera_stream = await navigator.mediaDevices.getUserMedia({
-                audio: !audio_source,
+                audio: audio_source === silence,
                 video: camera_video_constraints
             });
         } catch (ex) {
-            if (audio_source) {
+            if (audio_source !== silence) {
                 throw ex;
             }
             // retry in case audio isn't available
@@ -336,26 +343,15 @@ async function start() {
                 // start the camera video
                 this.play();
 
-                if (!audio_source) {
+                if (audio_source === silence) {
                     if (camera_stream.getAudioTracks().length > 0) {
+                        audio_source.disconnect();
                         // add audio if present
                         audio_source = audio_dest.context.createMediaStreamSource(camera_stream);
+                        audio_source.connect(audio_dest);
                     } else {
-                        console.warn("No audio present, adding silence");
-                        // Note: createBufferSource is supposed to be used to create silence
-                        // but it doesn't keep the page active if it's hidden.
-                        // Use createConstantSource instead. Since this is a constant value,
-                        // it won't generate something that changes (such as a sine or sawtooth
-                        // waveform) and so is inaudible. This passes the browser's silence
-                        // detection, which must just check for zero values.
-                        // Note: WebAudio destination stream output is bugged on Safari:
-                        // https://bugs.webkit.org/show_bug.cgi?id=173863
-                        // https://bugs.webkit.org/show_bug.cgi?id=198284
-                        //const silence = audio_dest.context.createBufferSource();
-                        audio_source = audio_dest.context.createConstantSource();
-                        audio_source.start();
+                        console.warn("No audio present, using silence");
                     }
-                    audio_source.connect(audio_dest);
                 }
 
                 await hls.start();
@@ -381,8 +377,10 @@ async function start() {
                 for (let track of camera_stream.getAudioTracks()) {
                     track.stop();
                 }
-                audio_source.disconnect();
-                audio_source = null;
+                if (audio_source !== silence) {
+                    audio_source.disconnect();
+                    audio_source = silence;
+                }
             }
         }
 
@@ -459,6 +457,21 @@ async function start() {
         // add audio to canvas stream
         audio_dest = new AudioContext().createMediaStreamDestination();
         canvas_stream.addTrack(audio_dest.stream.getAudioTracks()[0]);
+
+        // Note: createBufferSource is supposed to be used to create silence
+        // but it doesn't keep the page active if it's hidden.
+        // Use createConstantSource instead. Since this is a constant value,
+        // it won't generate something that changes (such as a sine or sawtooth
+        // waveform) and so is inaudible. This passes the browser's silence
+        // detection, which must just check for zero values.
+        // Note: WebAudio destination stream output is bugged on Safari:
+        // https://bugs.webkit.org/show_bug.cgi?id=173863
+        // https://bugs.webkit.org/show_bug.cgi?id=198284
+        //const silence = audio_dest.context.createBufferSource();
+        silence = audio_dest.context.createConstantSource();
+        silence.start();
+        audio_source = silence;
+        audio_source.connect(audio_dest);
 
         // HLS from the canvas stream to the ingestion URL
         hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
