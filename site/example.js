@@ -281,12 +281,11 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // chrome inspect not working
             // select which camera to use (front/rear)?
-            //   test fix for going small while rotating (switching?)
             //   option to switch audio as well
             //     audio source has two channels even though media stream is mono - check what's recorded
             // allow select audio and video devices
+            //     await navigator.mediaDevices.enumerateDevices()
             // mute option                +
             // hide camera option         |<- these input list along with audio and video devices?
             // audio/video source option  +
@@ -491,9 +490,7 @@ async function start() {
                 this.end(true);
             }
             waiting_el.classList.add('d-none');
-            if (!lock_portrait) {
-                camera_swap_el.classList.remove('d-none');
-            }
+            camera_swap_el.classList.remove('d-none');
             canvas_el.classList.remove('invisible');
             go_live_el.disabled = false;
             update();
