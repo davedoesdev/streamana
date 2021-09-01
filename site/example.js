@@ -4,7 +4,7 @@ import {
     video_encoder_codec,
     videoBitsPerSecond
 } from './hls.js';
-import shader from './greyscale-shader.js';
+import shader from './example-shader.js';
 import {
     supported_video_encoder_configs,
     max_video_encoder_config,
