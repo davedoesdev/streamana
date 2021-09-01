@@ -425,20 +425,26 @@ async function start() {
     }
 
     function about_face() {
-    // need to set camera_on in here
-        if (camera_stream) {
-            for (let track of camera_stream.getVideoTracks()) {
-                track.stop();
-            }
-            if (reset_audio_el.checked) {
-                for (let track of camera_stream.getAudioTracks()) {
+        if (camera_on) {
+            if (camera_stream) {
+                for (let track of camera_stream.getVideoTracks()) {
                     track.stop();
                 }
-                if (audio_source !== silence) {
-                    audio_source.disconnect();
-                    audio_source = silence;
-                    audio_source.connect(audio_dest);
+            }
+            camera_on = false;
+            gl_canvas.setUniform('u_active', camera_on);
+        }
+
+        if (reset_audio_el.checked) {
+            if (audio_source !== silence) {
+                if (camera_stream) {
+                   for (let track of camera_stream.getAudioTracks()) {
+                        track.stop();
+                    }
                 }
+                audio_source.disconnect();
+                audio_source = silence;
+                audio_source.connect(audio_dest);
             }
         }
 
