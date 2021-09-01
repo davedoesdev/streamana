@@ -5,10 +5,11 @@ uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform bool u_rotate;
 uniform bool u_greyscale;
+uniform bool u_active;
 
 out vec4 colour;
 
-vec4 grey(float x, float y) {
+vec4 tpix(float x, float y) {
   vec3 color = texture(u_texture, vec2(x, y)).rgb;
   if (!u_greyscale) {
     return vec4(color, 1.0);
@@ -18,6 +19,10 @@ vec4 grey(float x, float y) {
 }
 
 void main() {
+  if (!u_active) {
+    colour = vec4(0, 0, 0, 1.0);
+    return;
+  }
   ivec2 size = textureSize(u_texture, 0);
   float ar_texture = float(size.x) / float(size.y);
   if (u_rotate) {
@@ -29,7 +34,7 @@ void main() {
           (gl_FragCoord.y >= (border_height + height))) {
         colour = vec4(0);
       } else {
-        colour = grey(1.0 - (gl_FragCoord.y - border_height) / height,
+        colour = tpix(1.0 - (gl_FragCoord.y - border_height) / height,
                       gl_FragCoord.x / u_resolution.x);
       }
     } else {
@@ -39,7 +44,7 @@ void main() {
           (gl_FragCoord.x >= (border_width + width))) {
         colour = vec4(0);
       } else {
-        colour = grey(1.0 - gl_FragCoord.y / u_resolution.y,
+        colour = tpix(1.0 - gl_FragCoord.y / u_resolution.y,
                       (gl_FragCoord.x - border_width) / width);
       }
     }
@@ -52,7 +57,7 @@ void main() {
           (gl_FragCoord.x >= (border_width + width))) {
         colour = vec4(0);
       } else {
-        colour = grey((gl_FragCoord.x - border_width) / width,
+        colour = tpix((gl_FragCoord.x - border_width) / width,
                       gl_FragCoord.y / u_resolution.y);
       }
     } else {
@@ -62,7 +67,7 @@ void main() {
           (gl_FragCoord.y >= (border_height + height))) {
         colour = vec4(0);
       } else {
-        colour = grey(gl_FragCoord.x / u_resolution.x,
+        colour = tpix(gl_FragCoord.x / u_resolution.x,
                       (gl_FragCoord.y - border_height) / height);
       }
     }
