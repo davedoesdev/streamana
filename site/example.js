@@ -159,7 +159,7 @@ async function start() {
     const ar_encoder_inv = 1/ar_encoder;
 
     const zoom_video = zoom_video_el.checked;
-    const lock_portrait = screen.orientation.type.startsWith('portrait') && lock_portrait_el.checked;
+    const lock_portrait = /*screen.orientation.type.startsWith('portrait') &&*/ lock_portrait_el.checked;
     let video_el, silence, audio_source, audio_dest, gl_canvas, canvas_stream, camera_stream, done = false;
 
     function cleanup(err) {
@@ -286,15 +286,13 @@ async function start() {
             //     audio source has two channels even though media stream is mono - check what's recorded
             // allow select audio and video devices
             //     await navigator.mediaDevices.enumerateDevices()
-            // mute option                +
-            // hide camera option         |<- these input list along with audio and video devices?
-            // audio/video source option  +
+            // mute option                           +
+            // hide camera option                    |<- these input list along with audio and video devices?
+            // audio/video source (url/file) option  +
             // option to mix in >1 audio?
             // allow audio streaming only
             // scheduling (e.g. pre-roll)?
             // loop? (e.g. off-air image or video loop?)
-            // check behaviour when rotate phone
-            //   chrome bug when rotate (sometimes half page doesn't render)
             // performance on mobile
             // a40 no buffers currently available in the reader queue
             // windows, android, iOS, find a mac to test
