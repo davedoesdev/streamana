@@ -55,6 +55,12 @@ lock_portrait_el.addEventListener('input', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
 });
 
+const greyscale_el = document.getElementById('greyscale');
+greyscale_el.checked = !!localStorage.getItem('streamana-greyscale');
+greyscale_el.addEventListener('input', function () {
+    localStorage.setItem('streamana-greyscale', this.checked ? 'true' : '');
+});
+
 let facing_mode = localStorage.getItem('streamana-facing-mode') || 'user';
 
 const reset_audio_el = document.getElementById('reset-audio');
@@ -170,6 +176,7 @@ async function start() {
             return;
         }
         done = true;
+        greyscale_el.removeEventListener('input', greyscale);
         camera_swap_el.classList.add('d-none');
         camera_swap_el.removeEventListener('click', about_face);
         canvas_el_parent.classList.add('mx-auto');
@@ -384,6 +391,10 @@ async function start() {
         start_camera(facing_mode == 'user' ? 'environment' : 'user');
     }
 
+    function greyscale() {
+        gl_canvas.setUniform('u_greyscale', this.checked);
+    }
+
     try {
         // create video element which will be used for grabbing the frames to
         // write to a canvas so we can apply webgl shaders
@@ -414,6 +425,10 @@ async function start() {
 
         // tell canvas to use frames from video
         gl_canvas.setTexture('u_texture', video_el);
+
+        // tell shader whether to greyscale
+        gl_canvas.setUniform('u_greyscale', greyscale_el.checked);
+        greyscale_el.addEventListener('input', greyscale);
 
         // check whether we're locking portrait mode or zooming (display without bars)
         if (lock_portrait) {

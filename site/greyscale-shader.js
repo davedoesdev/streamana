@@ -5,11 +5,15 @@ precision highp float;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform bool u_rotate;
+uniform bool u_greyscale;
 
 out vec4 colour;
 
 vec4 grey(float x, float y) {
   vec3 color = texture(u_texture, vec2(x, y)).rgb;
+  if (!u_greyscale) {
+    return vec4(color, 1.0);
+  }
   float grey = dot(color, vec3(0.299, 0.587, 0.114));
   return vec4(vec3(grey), 1.0);
 }
