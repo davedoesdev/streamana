@@ -327,7 +327,7 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // windows, iOS, find a mac to test
+            // Android, iOS, find a mac to test
         }
     }
 
