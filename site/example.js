@@ -194,7 +194,7 @@ async function start() {
 
     const zoom_video = zoom_video_el.checked;
     const lock_portrait = /*screen.orientation.type.startsWith('portrait') &&*/ lock_portrait_el.checked;
-    let video_el, camera_on = false, silence, audio_source, audio_dest, gl_canvas, canvas_stream, camera_stream, done = false;
+    let video_el, video_track, silence, audio_source, audio_dest, gl_canvas, canvas_stream, done = false;
 
     function cleanup(err) {
         if (err) {
@@ -233,15 +233,18 @@ async function start() {
             error_alert_el.classList.add('show');
         }
         if (audio_source) {
+            if (audio_source.mediaStream) {
+                for (let track of audio_source.mediaStream.getAudioTracks()) {
+                    track.stop();
+                }
+            }
             audio_source.disconnect();
         }
         if (silence) {
             silence.stop();
         }
-        if (camera_stream) {
-            for (let track of camera_stream.getTracks()) {
-                track.stop();
-            }
+        if (video_track) {
+            video_track.stop();
         }
         if (gl_canvas) {
             gl_canvas.destroy();
@@ -269,7 +272,7 @@ async function start() {
 
     function update() {
         // update the canvas
-        if (!camera_on) {
+        if (!video_track) {
             gl_canvas.onLoop();
         } else if ((video_el.videoWidth > 0) &&
             (video_el.videoHeight > 0) &&
@@ -332,12 +335,13 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // windows, iOS, find a mac to test
             // performance on mobile
+            //   webcodecs performance on PC is less fps than MediaRecorder
+            // windows, iOS, find a mac to test
         }
     }
 
-    async function start_camera(requested_facing_mode) {
+    async function start_media(requested_facing_mode) {
         mic_el.removeEventListener('click', mic_toggle);
         camera_el.removeEventListener('click', camera_toggle);
         camera_swap_el.removeEventListener('click', about_face);
@@ -350,7 +354,7 @@ async function start() {
         }
 
         const need_audio = (audio_source === silence) && !mic_icon_el.classList.contains('off');
-        const need_video = !camera_on && !camera_icon_el.classList.contains('off');
+        const need_video = !video_track && !camera_icon_el.classList.contains('off');
         if (!need_audio && !need_video) {
             return await finish();
         }
@@ -365,8 +369,9 @@ async function start() {
             facingMode: requested_facing_mode
         };
 
+        let media_stream;
         try {
-            camera_stream = await navigator.mediaDevices.getUserMedia({
+            media_stream = await navigator.mediaDevices.getUserMedia({
                 audio: need_audio,
                 video: need_video ? camera_video_constraints : false
             });
@@ -376,7 +381,7 @@ async function start() {
             }
             // retry in case audio isn't available
             console.warn("Failed to get user media, retrying without audio");
-            camera_stream = await navigator.mediaDevices.getUserMedia({
+            media_stream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
                 video: camera_video_constraints
             });
@@ -392,22 +397,21 @@ async function start() {
                 this.play();
 
                 if (need_video) {
-                    const video_tracks = camera_stream.getVideoTracks();
+                    const video_tracks = media_stream.getVideoTracks();
                     if (video_tracks.length > 0) {
-                        facing_mode = video_tracks[0].facingMode || 'user';
+                        video_track = video_tracks[0];            
+                        facing_mode = video_track.getSettings().facingMode || 'user';
                         localStorage.setItem('streamana-facing-mode', facing_mode);
-                        camera_on = true;
-                        gl_canvas.setUniform('u_active', camera_on);
+                        gl_canvas.setUniform('u_active', true);
                     } else {
                         console.warn("No video present");
                     }
                 }
 
                 if (need_audio) {
-                    if (camera_stream.getAudioTracks().length > 0) {
+                    if (media_stream.getAudioTracks().length > 0) {
                         audio_source.disconnect();
-                        // add audio if present
-                        audio_source = audio_dest.context.createMediaStreamSource(camera_stream);
+                        audio_source = audio_dest.context.createMediaStreamSource(media_stream);
                         audio_source.connect(audio_dest);
                     } else {
                         console.warn("No audio present, using silence");
@@ -421,71 +425,54 @@ async function start() {
         }, { once: true });
 
         // pass the stream from the camera to the video so it can render the frames
-        video_el.srcObject = camera_stream;
+        video_el.srcObject = media_stream;
     }
 
-    function about_face() {
-        if (camera_on) {
-            if (camera_stream) {
-                for (let track of camera_stream.getVideoTracks()) {
+    function stop_camera() {
+        if (video_track) {
+            video_track.stop();
+            video_track = null;
+            gl_canvas.setUniform('u_active', false);
+        }
+    }
+
+    function stop_mic() {
+        if (audio_source !== silence) {
+            if (audio_source.mediaStream) {
+               for (let track of audio_source.mediaStream.getAudioTracks()) {
                     track.stop();
                 }
             }
-            camera_on = false;
-            gl_canvas.setUniform('u_active', camera_on);
+            audio_source.disconnect();
+            audio_source = silence;
+            audio_source.connect(audio_dest);
         }
+    }
 
+    function about_face() {
+        stop_camera();
         if (reset_audio_el.checked) {
-            if (audio_source !== silence) {
-                if (camera_stream) {
-                   for (let track of camera_stream.getAudioTracks()) {
-                        track.stop();
-                    }
-                }
-                audio_source.disconnect();
-                audio_source = silence;
-                audio_source.connect(audio_dest);
-            }
+            stop_mic();
         }
-
-        start_camera(facing_mode == 'user' ? 'environment' : 'user');
-    }
-
-    function greyscale() {
-        gl_canvas.setUniform('u_greyscale', this.checked);
-    }
-
-    function mic_toggle() {
-        if (mic_icon_el.classList.contains('off')) {
-            if (audio_source !== silence) {
-                if (camera_stream) {
-                    for (let track of camera_stream.getAudioTracks()) {
-                        track.stop();
-                    }
-                }
-                audio_source.disconnect();
-                audio_source = silence;
-                audio_source.connect(audio_dest);
-            }
-        }
-
-        start_camera(facing_mode);
+        start_media(facing_mode == 'user' ? 'environment' : 'user');
     }
 
     function camera_toggle() {
         if (camera_icon_el.classList.contains('off')) {
-            if (camera_on) {
-                if (camera_stream) {
-                    for (let track of camera_stream.getVideoTracks()) {
-                        track.stop();
-                    }
-                }
-                camera_on = false;
-                gl_canvas.setUniform('u_active', camera_on);
-            }
+            stop_camera();
         }
+        start_media(facing_mode);
+    }
 
-        start_camera(facing_mode);
+    function mic_toggle() {
+        if (mic_icon_el.classList.contains('off')) {
+            stop_mic();
+        }
+        start_media(facing_mode);
+    }
+
+    function greyscale() {
+        gl_canvas.setUniform('u_greyscale', this.checked);
     }
 
     try {
@@ -523,7 +510,7 @@ async function start() {
         greyscale_el.addEventListener('input', greyscale);
 
         // tell shader camera hasn't started
-        gl_canvas.setUniform('u_active', camera_on);
+        gl_canvas.setUniform('u_active', false);
 
         // check whether we're locking portrait mode or zooming (display without bars)
         if (lock_portrait) {
@@ -605,7 +592,7 @@ async function start() {
         });
         hls.addEventListener('update', update);
 
-        await start_camera(facing_mode);
+        await start_media(facing_mode);
     } catch (ex) {
         return cleanup(ex);
     }
