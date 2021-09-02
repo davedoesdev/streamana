@@ -37,9 +37,9 @@ export class HLS extends EventTarget {
             console.warn(ex);
             try {
                 // next try WebCodecs - this should work on Chrome including Android
-                this.webcodecs(video_encoder_codec,
-                               'opus' /*'pcm'*/,
-                               { avc: { format: 'annexb' } });
+                await this.webcodecs(video_encoder_codec,
+                                     'opus' /*'pcm'*/,
+                                     { avc: { format: 'annexb' } });
                 console.log("Using WebCodecs");
             } catch (ex) {
                 console.warn(ex);
@@ -51,6 +51,27 @@ export class HLS extends EventTarget {
         }
 
         this.started = true;
+    }
+
+    async start_dummy_processor() {
+        // use a persistent audio generator to trigger updates to avoid setInterval throttling
+        const context = new AudioContext();
+        await context.audioWorklet.addModule('./dummy-worklet.js');
+        this.dummy_processor = new AudioWorkletNode(context, 'dummy-processor', {
+            processorOptions: {
+                update_rate: this.frame_rate
+            }
+        });
+        this.dummy_processor.onerror = onerror;
+        this.dummy_processor.onprocessorerror = onerror;
+        this.dummy_processor.port.onmessage = () => this.dispatchEvent(this.update_event);
+        this.dummy_processor.connect(context.destination);
+    }
+
+    stop_dummy_processor() {
+        this.dummy_processor.port.postMessage({ type: 'stop' });
+        this.dummy_processor.disconnect();
+        this.dummy_processor.context.suspend();
     }
 
     async media_recorder(mimeType) {
@@ -79,18 +100,7 @@ export class HLS extends EventTarget {
             }
         };
 
-        // use a persistent audio generator to trigger updates to avoid setInterval throttling
-        const context = new AudioContext();
-        await context.audioWorklet.addModule('./dummy-worklet.js');
-        const dummy_processor = new AudioWorkletNode(context, 'dummy-processor', {
-            processorOptions: {
-                update_rate: this.frame_rate
-            }
-        });
-        dummy_processor.onerror = onerror;
-        dummy_processor.onprocessorerror = onerror;
-        dummy_processor.port.onmessage = () => this.dispatchEvent(this.update_event);
-        dummy_processor.connect(context.destination);
+        await this.start_dummy_processor();
 
         // start the ffmpeg worker
         this.receiver = new MuxReceiver();
@@ -134,9 +144,7 @@ export class HLS extends EventTarget {
                     if (recorder.state !== 'inactive') {
                         recorder.stop();
                     }
-                    dummy_processor.port.postMessage({ type: 'stop' });
-                    dummy_processor.disconnect();
-                    context.suspend();
+                    this.stop_dummy_processor();
                     if ((msg.code === 'force-end') && !this.sending) {
                         msg.code = 0;
                     }
@@ -146,7 +154,7 @@ export class HLS extends EventTarget {
         });
     }
 
-    webcodecs(video_codec, audio_codec, video_config, audio_config) {
+    async webcodecs(video_codec, audio_codec, video_config, audio_config) {
         const onerror = this.onerror.bind(this);
 
         const video_track = this.stream.getVideoTracks()[0];
@@ -157,7 +165,7 @@ export class HLS extends EventTarget {
         const audio_readable = (new MediaStreamTrackProcessor(audio_track)).readable;
         const audio_settings = audio_track.getSettings();
 
-        const update_limiter = new UpdateLimiter(this.frame_rate);
+        await this.start_dummy_processor();
 
         let num_exits = 0;
 
@@ -177,11 +185,6 @@ export class HLS extends EventTarget {
                     break;
 
                 case 'audio-data':
-                    if (update_limiter.check()) {
-                        this.dispatchEvent(this.update_event);
-                    }
-                    // falls through
-
                 case 'video-data':
                     this.worker.postMessage(msg, [msg.data]);
                     break;
@@ -244,6 +247,7 @@ export class HLS extends EventTarget {
                     this.worker = null;
                     video_worker.terminate();
                     audio_worker.terminate();
+                    this.stop_dummy_processor();
                     if ((msg.code === 'force-end') && !this.sending) {
                         msg.code = 0;
                     }
