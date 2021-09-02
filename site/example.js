@@ -63,12 +63,6 @@ greyscale_el.addEventListener('input', function () {
 
 let facing_mode = localStorage.getItem('streamana-facing-mode') || 'user';
 
-const reset_audio_el = document.getElementById('reset-audio');
-reset_audio_el.checked = !!localStorage.getItem('streamana-reset-audio');
-reset_audio_el.addEventListener('change', function () {
-    localStorage.setItem('streamana-reset-audio', this.checked ? 'true' : '');
-});
-
 function collapse_nav() {
     const collapse = bootstrap.Collapse.getInstance(document.getElementById('navbarToggleExternalContent'));
     if (collapse) {
@@ -170,7 +164,6 @@ async function start() {
     ffmpeg_lib_url_el.disabled = true;
     lock_portrait_el.disabled = true;
     zoom_video_el.disabled = true;
-    reset_audio_el.disabled = true;
     resolution_el.disabled = true;
     waiting_el.classList.remove('d-none');
     mic_el.removeEventListener('click', mic_save);
@@ -204,14 +197,14 @@ async function start() {
             return;
         }
         done = true;
-        mic_el.removeEventListener('click', mic_toggle);
+        mic_el.removeEventListener('click', media_toggle);
         if (!!localStorage.getItem('streamana-mic-on')) {
             mic_icon_el.classList.remove('off');
         } else {
             mic_icon_el.classList.add('off');
         }
         mic_el.addEventListener('click', mic_save);
-        camera_el.removeEventListener('click', camera_toggle);
+        camera_el.removeEventListener('click', media_toggle);
         if (!!localStorage.getItem('streamana-camera-on')) {
             camera_icon_el.classList.remove('off');
         } else {
@@ -264,7 +257,6 @@ async function start() {
         ffmpeg_lib_url_el.disabled = false;
         lock_portrait_el.disabled = false;
         zoom_video_el.disabled = false;
-        reset_audio_el.disabled = false;
         resolution_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
@@ -340,19 +332,22 @@ async function start() {
     }
 
     async function start_media(requested_facing_mode) {
-        mic_el.removeEventListener('click', mic_toggle);
-        camera_el.removeEventListener('click', camera_toggle);
+        mic_el.removeEventListener('click', media_toggle);
+        camera_el.removeEventListener('click', media_toggle);
         camera_swap_el.removeEventListener('click', about_face);
 
         async function finish() {
             await hls.start();
-            mic_el.addEventListener('click', mic_toggle);
-            camera_el.addEventListener('click', camera_toggle);
+            mic_el.addEventListener('click', media_toggle);
+            camera_el.addEventListener('click', media_toggle);
             camera_swap_el.addEventListener('click', about_face);
         }
 
-        const need_audio = (audio_source === silence) && !mic_icon_el.classList.contains('off');
-        const need_video = !video_track && !camera_icon_el.classList.contains('off');
+        const need_audio = !mic_icon_el.classList.contains('off');
+        const need_video = !camera_icon_el.classList.contains('off');
+
+        stop_media(need_audio, need_video);
+
         if (!need_audio && !need_video) {
             return await finish();
         }
@@ -394,6 +389,18 @@ async function start() {
                 // start the stream
                 this.play();
 
+                stop_media(false, false);
+
+                if (need_audio) {
+                    if (media_stream.getAudioTracks().length > 0) {
+                        audio_source.disconnect();
+                        audio_source = audio_dest.context.createMediaStreamSource(media_stream);
+                        audio_source.connect(audio_dest);
+                    } else {
+                        console.warn("No audio present, using silence");
+                    }
+                }
+
                 if (need_video) {
                     const video_tracks = media_stream.getVideoTracks();
                     if (video_tracks.length > 0) {
@@ -403,16 +410,6 @@ async function start() {
                         gl_canvas.setUniform('u_active', true);
                     } else {
                         console.warn("No video present");
-                    }
-                }
-
-                if (need_audio) {
-                    if (media_stream.getAudioTracks().length > 0) {
-                        audio_source.disconnect();
-                        audio_source = audio_dest.context.createMediaStreamSource(media_stream);
-                        audio_source.connect(audio_dest);
-                    } else {
-                        console.warn("No audio present, using silence");
                     }
                 }
 
@@ -426,16 +423,8 @@ async function start() {
         video_el.srcObject = media_stream;
     }
 
-    function stop_camera() {
-        if (video_track) {
-            video_track.stop();
-            video_track = null;
-            gl_canvas.setUniform('u_active', false);
-        }
-    }
-
-    function stop_mic() {
-        if (audio_source !== silence) {
+    function stop_media(need_audio, need_video) {
+        if ((audio_source !== silence) && !need_audio) {
             if (audio_source.mediaStream) {
                for (let track of audio_source.mediaStream.getAudioTracks()) {
                     track.stop();
@@ -445,27 +434,19 @@ async function start() {
             audio_source = silence;
             audio_source.connect(audio_dest);
         }
+
+        if (video_track && !need_video) {
+            video_track.stop();
+            video_track = null;
+            gl_canvas.setUniform('u_active', false);
+        }
     }
 
     function about_face() {
-        stop_camera();
-        if (reset_audio_el.checked) {
-            stop_mic();
-        }
         start_media(facing_mode == 'user' ? 'environment' : 'user');
     }
 
-    function camera_toggle() {
-        if (camera_icon_el.classList.contains('off')) {
-            stop_camera();
-        }
-        start_media(facing_mode);
-    }
-
-    function mic_toggle() {
-        if (mic_icon_el.classList.contains('off')) {
-            stop_mic();
-        }
+    function media_toggle() {
         start_media(facing_mode);
     }
 
