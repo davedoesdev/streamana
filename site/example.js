@@ -394,58 +394,49 @@ async function start() {
             }
         }
 
-        if (!media_stream) {
+        function set_media(audio_tracks, video_tracks) {
             stop_media(false, false);
 
             if (need_audio) {
-                console.warn("Failed to get user audio, using silence");
-                mic_icon_el.classList.add('off');
+                if (audio_tracks.length > 0) {
+                    audio_source.disconnect();
+                    audio_source = audio_dest.context.createMediaStreamSource(media_stream);
+                    audio_source.connect(audio_dest);
+                } else {
+                    console.warn("No audio present, using silence");
+                    mic_icon_el.classList.add('off');
+                }
             }
 
             if (need_video) {
-                console.warn("Failed to get user video, using blank frames");
-                camera_icon_el.classList.add('off');
+                if (video_tracks.length > 0) {
+                    video_track = video_tracks[0];
+                    facing_mode = video_track.getSettings().facingMode || 'user';
+                    localStorage.setItem('streamana-facing-mode', facing_mode);
+                    gl_canvas.setUniform('u_active', true);
+                } else {
+                    console.warn("No video present, using blank frames");
+                    camera_icon_el.classList.add('off');
+                }
             }
 
-            return await finish();
+            finish();
+        }
+
+        if (!media_stream) {
+            return set_media([], []);
         }
 
         // wait for stream to load (must come after gl_canvas.setTexture() since it
         // registers a loadeddata handler which then registers a play handler)
-        video_el.addEventListener('loadeddata', async function () {
+        video_el.addEventListener('loadeddata', function () {
             try {
                 console.log(`video resolution: ${this.videoWidth}x${this.videoHeight}`);
 
                 // start the stream
                 this.play();
 
-                stop_media(false, false);
-
-                if (need_audio) {
-                    if (media_stream.getAudioTracks().length > 0) {
-                        audio_source.disconnect();
-                        audio_source = audio_dest.context.createMediaStreamSource(media_stream);
-                        audio_source.connect(audio_dest);
-                    } else {
-                        console.warn("No audio present, using silence");
-                        mic_icon_el.classList.add('off');
-                    }
-                }
-
-                if (need_video) {
-                    const video_tracks = media_stream.getVideoTracks();
-                    if (video_tracks.length > 0) {
-                        video_track = video_tracks[0];            
-                        facing_mode = video_track.getSettings().facingMode || 'user';
-                        localStorage.setItem('streamana-facing-mode', facing_mode);
-                        gl_canvas.setUniform('u_active', true);
-                    } else {
-                        console.warn("No video present");
-                        camera_icon_el.classList.add('off');
-                    }
-                }
-
-                await finish();
+                set_media(media_stream.getAudioTracks(), media_stream.getVideoTracks());
             } catch (ex) {
                 cleanup(ex);
             }
