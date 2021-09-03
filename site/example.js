@@ -369,15 +369,45 @@ async function start() {
                 video: need_video ? camera_video_constraints : false
             });
         } catch (ex) {
-            if (!need_audio) {
-                throw ex;
+            console.warn(`Failed to get user media (need_audio=${need_audio} need_video=${need_video})`);
+            console.error(ex);
+            if (need_audio && need_video) {
+                console.warn("Retrying with only video");
+                try {
+                    media_stream = await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: camera_video_constraints
+                    });
+                } catch (ex) {
+                    console.warn('Failed to get user video, retrying with only audio');
+                    console.error(ex);
+                    try {
+                        media_stream = await navigator.mediaDevices.getUserMedia({
+                            audio: true,
+                            video: false
+                        });
+                    } catch (ex) {
+                        console.warn('Failed to get user audio');
+                        console.error(ex);
+                    }
+                }
             }
-            // retry in case audio isn't available
-            console.warn("Failed to get user media, retrying without audio");
-            media_stream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: camera_video_constraints
-            });
+        }
+
+        if (!media_stream) {
+            stop_media(false, false);
+
+            if (need_audio) {
+                console.warn("Failed to get user audio, using silence");
+                mic_icon_el.classList.add('off');
+            }
+
+            if (need_video) {
+                console.warn("Failed to get user video, using blank frames");
+                camera_icon_el.classList.add('off');
+            }
+
+            return await finish();
         }
 
         // wait for stream to load (must come after gl_canvas.setTexture() since it
@@ -398,6 +428,7 @@ async function start() {
                         audio_source.connect(audio_dest);
                     } else {
                         console.warn("No audio present, using silence");
+                        mic_icon_el.classList.add('off');
                     }
                 }
 
@@ -410,6 +441,7 @@ async function start() {
                         gl_canvas.setUniform('u_active', true);
                     } else {
                         console.warn("No video present");
+                        camera_icon_el.classList.add('off');
                     }
                 }
 
