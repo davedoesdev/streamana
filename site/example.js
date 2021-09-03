@@ -6,8 +6,8 @@ import {
 } from './hls.js';
 import shader from './example-shader.js';
 import {
-    supported_video_encoder_configs,
-    max_video_encoder_config,
+    supported_video_configs,
+    max_video_config,
 } from './resolution.js';
 
 const target_frame_rate = 30;
@@ -106,42 +106,42 @@ camera_el.addEventListener('click', camera_save);
 
 const camera_swap_el = document.getElementById('camera-swap');
 
-let video_encoder_config;
+let video_config;
 let preferred_resolution = localStorage.getItem('streamana-resolution');
 if (preferred_resolution) {
-    video_encoder_config = await max_video_encoder_config({
+    video_config = await max_video_config({
         ...JSON.parse(preferred_resolution),
         codec: video_encoder_codec,
         bitrate: videoBitsPerSecond
-    });
+    }, true);
 }
-if (!video_encoder_config) {
-    video_encoder_config =  await max_video_encoder_config({
+if (!video_config) {
+    video_config =  await max_video_config({
         width: 1280,
         height: 720,
         ratio: 16/9,
         codec: video_encoder_codec,
         bitrate: videoBitsPerSecond
-    });
+    }, true);
 }
 const resolution_el = document.getElementById('resolution');
-const video_encoder_configs = new Map();
-for (let config of (await supported_video_encoder_configs({
+const video_configs = new Map();
+for (let config of (await supported_video_configs({
     codec: video_encoder_codec,
     bitrate: videoBitsPerSecond
-})).filter(c => c.ratio >= 1)) {
+}, true)).filter(c => c.ratio >= 1)) {
     const option = document.createElement('option');
     option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
-    option.selected = config.label === video_encoder_config.label;
+    option.selected = config.label === video_config.label;
     resolution_el.appendChild(option);
-    video_encoder_configs.set(option.innerText, config);
+    video_configs.set(option.innerText, config);
 }
 resolution_el.addEventListener('change', function (ev) {
-    video_encoder_config = video_encoder_configs.get(this.value);
+    video_config = video_configs.get(this.value);
     localStorage.setItem('streamana-resolution', JSON.stringify({
-        width: video_encoder_config.width,
-        height: video_encoder_config.height,
-        ratio: video_encoder_config.ratio
+        width: video_config.width,
+        height: video_config.height,
+        ratio: video_config.ratio
     }));
 });
 
@@ -180,14 +180,14 @@ async function start() {
         error_alert_el_parent.removeChild(error_alert_el);
     }
 
-    // get aspect ratio of encoder
-    console.log(`encoder resolution: ${video_encoder_config.width}x${video_encoder_config.height}`);
-    const ar_encoder = video_encoder_config.ratio;
-    const ar_encoder_inv = 1/ar_encoder;
+    // get video config aspect ratio
+    console.log(`video config resolution: ${video_config.width}x${video_config.height}`);
+    const ar_config = video_config.ratio;
+    const ar_config_inv = 1/ar_config;
 
     const zoom_video = zoom_video_el.checked;
     const lock_portrait = /*screen.orientation.type.startsWith('portrait') &&*/ lock_portrait_el.checked;
-    let video_el, video_track, silence, audio_source, audio_dest, gl_canvas, canvas_stream, done = false;
+    let audio_context, video_el, video_track, silence, audio_source, audio_dest, gl_canvas, canvas_stream, done = false;
 
     function cleanup(err) {
         if (err) {
@@ -236,6 +236,9 @@ async function start() {
         if (silence) {
             silence.stop();
         }
+        if (audio_context) {
+            audio_context.close();
+        }
         if (video_track) {
             video_track.stop();
         }
@@ -279,54 +282,56 @@ async function start() {
                               canvas_el_parent.offsetHeight;
             if (lock_portrait) {
                 if (zoom_video) {
-                    if (ar_video < ar_encoder_inv) {
+                    if (ar_video < ar_config_inv) {
                         if (ar_parent >= ar_video) {
-                            height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                            height = canvas_el_parent.offsetHeight * ar_config_inv;
                             width = canvas_el_parent.offsetHeight;
                         } else {
-                            height = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.width * ar_video / video_encoder_config.height);
+                            height = canvas_el_parent.parentNode.offsetWidth / (video_config.width * ar_video / video_config.height);
                             width = canvas_el_parent.parentNode.offsetWidth / ar_video;
                         }
                     } else if (ar_parent >= ar_video) {
                         height = canvas_el_parent.offsetHeight * ar_video;
-                        width = canvas_el_parent.offsetHeight / (video_encoder_config.height / ar_video / video_encoder_config.width);
+                        width = canvas_el_parent.offsetHeight / (video_config.height / ar_video / video_config.width);
                     } else {
                         height = canvas_el_parent.parentNode.offsetWidth;
-                        width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
+                        width = canvas_el_parent.parentNode.offsetWidth / ar_config_inv;
                     }
-                } else if (ar_parent >= ar_encoder_inv) {
-                    height = canvas_el_parent.offsetHeight * ar_encoder_inv;
+                } else if (ar_parent >= ar_config_inv) {
+                    height = canvas_el_parent.offsetHeight * ar_config_inv;
                     width = canvas_el_parent.offsetHeight;
                 } else {
                     height = canvas_el_parent.parentNode.offsetWidth;
-                    width = canvas_el_parent.parentNode.offsetWidth / ar_encoder_inv;
+                    width = canvas_el_parent.parentNode.offsetWidth / ar_config_inv;
                 }
             } else if (zoom_video) {
-                if (ar_video < ar_encoder) {
+                if (ar_video < ar_config) {
                     if (ar_parent >= ar_video) {
-                        width = canvas_el_parent.offsetHeight * ar_encoder;
+                        width = canvas_el_parent.offsetHeight * ar_config;
                         height = canvas_el_parent.offsetHeight;
                     } else {
-                        width = canvas_el_parent.parentNode.offsetWidth / (video_encoder_config.height * ar_video / video_encoder_config.width);
+                        width = canvas_el_parent.parentNode.offsetWidth / (video_config.height * ar_video / video_config.width);
                         height = canvas_el_parent.parentNode.offsetWidth / ar_video;
                     }
                 } else if (ar_parent >= ar_video) {
                     width = canvas_el_parent.offsetHeight * ar_video;
-                    height = canvas_el_parent.offsetHeight / (video_encoder_config.width / ar_video / video_encoder_config.height);
+                    height = canvas_el_parent.offsetHeight / (video_config.width / ar_video / video_config.height);
                 } else {
                     width = canvas_el_parent.parentNode.offsetWidth;
-                    height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
+                    height = canvas_el_parent.parentNode.offsetWidth / ar_config;
                 }
-            } else if (ar_parent >= ar_encoder) {
-                width = canvas_el_parent.offsetHeight * ar_encoder;
+            } else if (ar_parent >= ar_config) {
+                width = canvas_el_parent.offsetHeight * ar_config;
                 height = canvas_el_parent.offsetHeight;
             } else {
                 width = canvas_el_parent.parentNode.offsetWidth;
-                height = canvas_el_parent.parentNode.offsetWidth / ar_encoder;
+                height = canvas_el_parent.parentNode.offsetWidth / ar_config;
             }
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
+            // speaker still showing on safari mac if nothing enabled then stop
+            // white screen for video on safari mac
             // Android, iOS, find a mac to test
         }
     }
@@ -353,8 +358,8 @@ async function start() {
         }
 
         const camera_video_constraints = {
-            width: video_encoder_config.width,
-            height: video_encoder_config.height,
+            width: video_config.width,
+            height: video_config.height,
             frameRate: {
                 ideal: target_frame_rate,
                 max: target_frame_rate
@@ -478,6 +483,9 @@ async function start() {
     }
 
     try {
+        audio_context = new AudioContext();
+        audio_context.resume();
+
         // create video element which will be used for grabbing the frames to
         // write to a canvas so we can apply webgl shaders
         // also used to get the native video dimensions
@@ -493,9 +501,9 @@ async function start() {
 
         canvas_el.addEventListener('webglcontextlost', cleanup);
 
-        // set canvas dimensions to same as encoder so its gets all the output
-        canvas_el.width = video_encoder_config.width;
-        canvas_el.height = video_encoder_config.height;
+        // set canvas dimensions to same as video config so its gets all the output
+        canvas_el.width = video_config.width;
+        canvas_el.height = video_config.height;
 
         // use glsl-canvas to make managing webgl stuff easier
         gl_canvas = new GlCanvas(canvas_el, {
@@ -547,11 +555,10 @@ async function start() {
         // capture video from the canvas
         // Note: Safari on iOS doesn't get any data, might be related to
         // https://bugs.webkit.org/show_bug.cgi?id=181663
-        //const frame_rate = video_settings.frameRate;
         canvas_stream = canvas_el.captureStream(target_frame_rate);
 
         // add audio to canvas stream
-        audio_dest = new AudioContext().createMediaStreamDestination();
+        audio_dest = audio_context.createMediaStreamDestination();
         canvas_stream.addTrack(audio_dest.stream.getAudioTracks()[0]);
 
         // Note: createBufferSource is supposed to be used to create silence
@@ -570,7 +577,7 @@ async function start() {
         audio_source.connect(audio_dest);
 
         // HLS from the canvas stream to the ingestion URL
-        hls = new HLS(canvas_stream, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
+        hls = new HLS(canvas_stream, audio_context, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
         hls.addEventListener('run', () => console.log('HLS running'));
         hls.addEventListener('exit', ev => {
             const msg = `HLS exited with status ${ev.detail.code}`;

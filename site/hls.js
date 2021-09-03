@@ -8,9 +8,10 @@ const key_frame_interval = 3;
 export const video_encoder_codec = 'avc1.42E01E' /*'avc1.42001E'*/;
 
 export class HLS extends EventTarget {
-    constructor(stream, base_url, ffmpeg_lib_url, frame_rate, rotate) {
+    constructor(stream, audio_context, base_url, ffmpeg_lib_url, frame_rate, rotate) {
         super();
         this.stream = stream;
+        this.audio_context = audio_context;
         this.base_url = base_url;
         this.ffmpeg_lib_url = ffmpeg_lib_url;
         this.frame_rate = frame_rate;
@@ -55,9 +56,8 @@ export class HLS extends EventTarget {
 
     async start_dummy_processor() {
         // use a persistent audio generator to trigger updates to avoid setInterval throttling
-        const context = new AudioContext();
-        await context.audioWorklet.addModule('./dummy-worklet.js');
-        this.dummy_processor = new AudioWorkletNode(context, 'dummy-processor', {
+        await this.audio_context.audioWorklet.addModule('./dummy-worklet.js');
+        this.dummy_processor = new AudioWorkletNode(this.audio_context, 'dummy-processor', {
             processorOptions: {
                 update_rate: this.frame_rate
             }
@@ -65,13 +65,12 @@ export class HLS extends EventTarget {
         this.dummy_processor.onerror = onerror;
         this.dummy_processor.onprocessorerror = onerror;
         this.dummy_processor.port.onmessage = () => this.dispatchEvent(this.update_event);
-        this.dummy_processor.connect(context.destination);
+        this.dummy_processor.connect(this.audio_context.destination);
     }
 
     stop_dummy_processor() {
         this.dummy_processor.port.postMessage({ type: 'stop' });
         this.dummy_processor.disconnect();
-        this.dummy_processor.context.suspend();
     }
 
     async media_recorder(mimeType) {
