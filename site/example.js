@@ -341,8 +341,8 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // white screen for video on safari mac
-            // Android, iOS, find a mac to test
+            // white screen for video on safari mac vmware
+            // iOS, find a mac to test
         }
     }
 
