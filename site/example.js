@@ -361,7 +361,7 @@ async function start() {
         const need_audio = !mic_icon_el.classList.contains('off');
         const need_video = !camera_icon_el.classList.contains('off');
 
-        stop_media(need_audio, need_video);
+        stop_media(need_audio, need_video && (requested_facing_mode === facing_mode));
 
         if (!need_audio && !need_video) {
             return await finish();
