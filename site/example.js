@@ -341,7 +341,6 @@ async function start() {
             canvas_el.style.width = `${width}px`;
             canvas_el.style.height = `${height}px`;
             // TODO:
-            // speaker still showing on safari mac if nothing enabled then stop
             // white screen for video on safari mac
             // Android, iOS, find a mac to test
         }
