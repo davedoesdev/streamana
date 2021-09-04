@@ -233,11 +233,21 @@ async function start() {
             }
             audio_source.disconnect();
         }
+        if (audio_dest) {
+            if (audio_dest.stream) {
+                for (let track of audio_dest.stream.getAudioTracks()) {
+                    track.stop();
+                }
+            }
+            audio_dest.disconnect();
+        }
         if (silence) {
             silence.stop();
         }
         if (audio_context) {
-            audio_context.close();
+            audio_context.suspend().then(function () {
+                audio_context.close();
+            });;
         }
         if (video_track) {
             video_track.stop();
@@ -253,6 +263,7 @@ async function start() {
         if (hls) {
             hls.end(!!err);
         }
+
         go_live_el.checked = false;
         go_live_el.disabled = false;
         ingestion_url_el.disabled = false;
@@ -483,6 +494,8 @@ async function start() {
     }
 
     try {
+        // Safari requires us to create and resume an AudioContext in the click handler
+        // and doesn't track async calls.
         audio_context = new AudioContext();
         audio_context.resume();
 
