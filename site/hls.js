@@ -35,7 +35,7 @@ export class HLS extends EventTarget {
             await this.media_recorder('video/webm;codecs=H264');
             console.log("Using MediaRecorder WebM/h264");
         } catch (ex) {
-            console.warn(ex);
+            console.warn(ex.toString());
             try {
                 // next try WebCodecs - this should work on Chrome including Android
                 await this.webcodecs(video_encoder_codec,
@@ -43,7 +43,7 @@ export class HLS extends EventTarget {
                                      { avc: { format: 'annexb' } });
                 console.log("Using WebCodecs");
             } catch (ex) {
-                console.warn(ex);
+                console.warn(ex.toString());
                 // finally try MP4 - this should work on Safari MacOS and iOS, producing H264
                 // this assumes ffmpeg.js has been configured with MP4 support
                 await this.media_recorder('video/mp4');
@@ -247,7 +247,7 @@ export class HLS extends EventTarget {
                     video_worker.terminate();
                     audio_worker.terminate();
                     this.stop_dummy_processor();
-                    if ((msg.code === 'force-end') && !this.sending) {
+                    if ((msg.code === 'force-end') && this.was_not_sending) {
                         msg.code = 0;
                     }
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
@@ -288,7 +288,8 @@ export class HLS extends EventTarget {
     }
 
     end(force) {
-        force = force || !this.sending;
+        this.was_not_sending = !this.sending;
+        force = force || this.was_not_sending;
         if (force) {
             if (this.receiver) {
                 this.receiver.end({ force });

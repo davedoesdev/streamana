@@ -191,7 +191,7 @@ async function start() {
 
     function cleanup(err) {
         if (err) {
-            console.error(err);
+            console.error(err.toString());
         }
         if (done) {
             return;
@@ -382,7 +382,7 @@ async function start() {
             });
         } catch (ex) {
             console.warn(`Failed to get user media (need_audio=${need_audio} need_video=${need_video})`);
-            console.error(ex);
+            console.error(ex.toString());
             if (need_audio && need_video) {
                 console.warn("Retrying with only video");
                 try {
@@ -392,7 +392,7 @@ async function start() {
                     });
                 } catch (ex) {
                     console.warn('Failed to get user video, retrying with only audio');
-                    console.error(ex);
+                    console.error(ex.toString());
                     try {
                         media_stream = await navigator.mediaDevices.getUserMedia({
                             audio: true,
@@ -400,7 +400,7 @@ async function start() {
                         });
                     } catch (ex) {
                         console.warn('Failed to get user audio');
-                        console.error(ex);
+                        console.error(ex.toString());
                     }
                 }
             }
