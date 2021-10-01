@@ -150,10 +150,17 @@ let hls;
 async function start() {
     const ingestion_url = ingestion_url_el.value.trim();
     if (!ingestion_url) {
+        console.error('No ingestion URL');
         go_live_el.checked = false;
         return;
     }
     localStorage.setItem('streamana-example-ingestion-url', ingestion_url);
+
+    if (!video_config) {
+        console.error('No video config');
+        go_live_el.checked = false;
+        return;
+    }
 
     const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
                            ffmpeg_lib_url_el.placeholder.trim();
