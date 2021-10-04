@@ -45,7 +45,7 @@ export class HLS extends EventTarget {
             } catch (ex) {
                 console.warn(ex.toString());
                 // finally try MP4 - this should work on Safari MacOS and iOS, producing H264
-                // this assumes ffmpeg.js has been configured with MP4 support
+                // this assumes ffmpeg-hls.js has been configured with MP4 support
                 await this.media_recorder('video/mp4');
                 console.log("Using MediaRecorder MP4");
             }

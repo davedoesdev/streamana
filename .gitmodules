@@ -1,6 +1,6 @@
-[submodule "ffmpeg.js"]
-	path = ffmpeg.js
-	url = git@github.com:davedoesdev/ffmpeg.js.git
+[submodule "ffmpeg-hls.js"]
+	path = ffmpeg-hls.js
+	url = git@github.com:davedoesdev/ffmpeg-hls.js.git
 [submodule "webm-muxer.js"]
 	path = webm-muxer.js
 	url = https://github.com/davedoesdev/webm-muxer.js
