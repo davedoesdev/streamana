@@ -1,3 +1,6 @@
 [submodule "webm-muxer.js"]
 	path = webm-muxer.js
 	url = https://github.com/davedoesdev/webm-muxer.js
+[submodule "ffmpeg.js"]
+	path = ffmpeg.js
+	url = https://github.com/davedoesdev/ffmpeg.js.git
