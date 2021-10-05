@@ -1,1 +1,1 @@
-../ffmpeg-hls.js/ffmpeg-worker-hls.js
+../ffmpeg.js/ffmpeg-worker-hls.js
