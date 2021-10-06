@@ -4,7 +4,7 @@ import {
     video_encoder_codec,
     videoBitsPerSecond
 } from './hls.js';
-import shader from './example-shader.js';
+import shader from './shader.js';
 import {
     supported_video_configs,
     max_video_config,
@@ -13,7 +13,7 @@ import {
 const target_frame_rate = 30;
 
 const ingestion_url_el = document.getElementById('ingestion-url');
-ingestion_url_el.value = localStorage.getItem('streamana-example-ingestion-url');
+ingestion_url_el.value = localStorage.getItem('streamana-ingestion-url');
 
 const go_live_el = document.getElementById('go-live');
 go_live_el.disabled = false;
@@ -154,7 +154,7 @@ async function start() {
         go_live_el.checked = false;
         return;
     }
-    localStorage.setItem('streamana-example-ingestion-url', ingestion_url);
+    localStorage.setItem('streamana-ingestion-url', ingestion_url);
 
     if (!video_config) {
         console.error('No video config');
