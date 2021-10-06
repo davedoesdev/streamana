@@ -1,0 +1,72 @@
+= Streamana
+
+== Description
+
+Streamana is a Web page which streams your camera and microphone to YouTube Live.
+It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
+https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
+
+== Demo
+
+You can see it in action http://foo[here]. Use Chrome 95 or later.
+
+. Get your ingestion URL from https://studio.youtube.com[YouTube Studio].
+.. Click _CREATE_ and then select _Go Live_ from the drop-down menu.
+.. Under _Select stream key_, select _Create new stream key_.
+.. Give your key a name.
+.. You must select _HLS_ as the streaming protocol.
+.. Click _CREATE_.
+.. Make sure the key you created is selected.
+.. Click _COPY_ next to _Stream URL_.
+. Paste the URL into the _Ingestion URL_ box in Streamana.
+. Click _Live_.
+.. If you want to see what's happening under the hood, open developer tools (F12).
+. To end the stream, click _Live_ again.
+
+You can also change various options:
+
+* Mute and unmute your microphone by clicking on the microphone symbol.
+* Hide and show your camera by clickon the camera symbol.
+* Under the drop-down menu (top-left):
+** Change the camera resolution.
+** Convert your camera's video to greyscale.
+** Lock the camera to portrait mode (where available, e.g. mobile phones).
+** Zoom the camera to fill your browser.
+** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
+   the HLS encoding.
+
+== Customisation
+
+You can change the look and feel of Streamana by editing link:site/streamana.html[]
+and link:site/streamana.css[].
+
+The camera video is passed through a WebGL fragment shared in link:site/shader.js[]
+so you can change this to add video effects or overlays. The shader already handles
+resizing and rotating the video in `main()`. The optional greyscale conversion is in
+the `tpix()` function.
+
+The page's functionality is defined in link:site/streamana.js[] and link:site/hls.js[].
+
+link:site/hls.js[] exports a class, `HLS`, which does the heavy lifting:
+
+* The constructor takes the following arguments:
+** The https://developer.mozilla.org/en-US/docs/Web/API/MediaStream[`MediaStream`]
+   containing your video and audio tracks. Note that link:site/streamana.js[] supplies
+   blank video when the camera is hidden and silent audio when the microphone is muted.
+** The ingestion URL.
+** The URL of `ffmpeg-worker-hls.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
+   This allows your application (or the end user if required) to supply their own version,
+   in accordace with LGPL.
+** The desired video frame rate.
+** Whether the video is rotated.
+* Call the `async start()` function to start streaming.
+* Call the `end()` function to stop streaming.
+
+`HLS` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
+and dispatches the following events:
+
+* `start` when streaming has started.
+* `update`, dispatched frame rate times a second. link:site/streamana.js[] reacts to this
+  event by refreshing the WebGL canvas from the camera.
+* `exit` when streaming has stopped.
+* `error` if an error occurs.
