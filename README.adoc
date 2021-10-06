@@ -20,18 +20,18 @@ You can see it in action http://foo[here]. Use Chrome 95 or later.
 .. Click _COPY_ next to _Stream URL_.
 . Paste the URL into the _Ingestion URL_ box in Streamana.
 . Click _Live_.
-.. If you want to see what's happening under the hood, open developer tools (F12).
+** If you want to see what's happening under the hood, open developer tools (F12).
 . To end the stream, click _Live_ again.
 
 You can also change various options:
 
 * Mute and unmute your microphone by clicking on the microphone symbol.
-* Hide and show your camera by clickon the camera symbol.
+* Hide and show your camera by clicking on the camera symbol.
 * Under the drop-down menu (top-left):
 ** Change the camera resolution.
 ** Convert your camera's video to greyscale.
 ** Lock the camera to portrait mode (where available, e.g. mobile phones).
-** Zoom the camera to fill your browser.
+** Zoom the camera to fill the page.
 ** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
    the HLS encoding.
 
@@ -40,7 +40,7 @@ You can also change various options:
 You can change the look and feel of Streamana by editing link:site/streamana.html[]
 and link:site/streamana.css[].
 
-The camera video is passed through a WebGL fragment shared in link:site/shader.js[]
+The camera video is passed through a WebGL fragment shader in link:site/shader.js[]
 so you can change this to add video effects or overlays. The shader already handles
 resizing and rotating the video in `main()`. The optional greyscale conversion is in
 the `tpix()` function.
@@ -55,8 +55,8 @@ link:site/hls.js[] exports a class, `HLS`, which does the heavy lifting:
    blank video when the camera is hidden and silent audio when the microphone is muted.
 ** The ingestion URL.
 ** The URL of `ffmpeg-worker-hls.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
-   This allows your application (or the end user if required) to supply their own version,
-   in accordace with LGPL.
+   This allows your application (or the end user if required) to supply its own version,
+   in accordance with LGPL.
 ** The desired video frame rate.
 ** Whether the video is rotated.
 * Call the `async start()` function to start streaming.
