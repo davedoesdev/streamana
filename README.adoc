@@ -2,13 +2,14 @@
 
 == Description
 
-Streamana is a Web page which streams your camera and microphone to YouTube Live.
-It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
+Streamana is a Web page which streams your camera and microphone to YouTube Live
+(or any other HLS receiver). It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
 https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
 
 == Demo
 
-You can see it in action http://foo[here]. Use Chrome 95 or later.
+You can see it in action https://rawgit-now.netlify.app/davedoesdev/streamana/main/demo.html[here].
+Use Chrome 95 or later.
 
 . Get your ingestion URL from https://studio.youtube.com[YouTube Studio].
 .. Click _CREATE_ and then select _Go Live_ from the drop-down menu.
@@ -70,3 +71,11 @@ and dispatches the following events:
   event by refreshing the WebGL canvas from the camera.
 * `exit` when streaming has stopped.
 * `error` if an error occurs.
+
+== Licence
+
+Streamana is licensed under the terms of the link:LICENCE[MIT licence].
+
+Note that https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] is licensed under LGPL.
+Streamana runs it inside a Web Worker and communicates with it via message passing.
+The end user can replace the version used by changing the URL in the user interface.
