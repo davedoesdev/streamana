@@ -8,7 +8,9 @@ https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
 
 == Demo
 
-You can see it in action https://rawgit-now.netlify.app/davedoesdev/streamana/main/demo.html[here].
+NOTE: I'm currently working on getting the demo hosted.
+
+You can see it in action https://rawgit-now.netlify.app/davedoesdev/streamana/main/site/streamana.html[here].
 Use Chrome 95 or later.
 
 . Get your ingestion URL from https://studio.youtube.com[YouTube Studio].
