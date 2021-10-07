@@ -79,3 +79,8 @@ Streamana is licensed under the terms of the link:LICENCE[MIT licence].
 Note that https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] is licensed under LGPL.
 Streamana runs it inside a Web Worker and communicates with it via message passing.
 The end user can replace the version used by changing the URL in the user interface.
+
+Note also that the https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] HLS distribution
+contains no H.264 or MP4 code. All encoding is done by the browser using
+https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder[`MediaRecorder`] or
+https://www.w3.org/TR/webcodecs/[WebCodecs].
