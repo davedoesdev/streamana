@@ -508,7 +508,7 @@ async function start() {
         video_el = document.createElement('video');
         video_el.muted = true;
         video_el.playsInline = true;
-        video_el.crossorigin = "anonymous";
+        video_el.crossOrigin = "anonymous";
 
         // Safari on iOS requires us to play() in the click handler and doesn't
         // track async calls. So we play a blank video first. After that, the video
