@@ -211,6 +211,8 @@ export class HLS extends EventTarget {
                         config: {
                             codec: video_codec,
                             bitrate: videoBitsPerSecond,
+                            framerate: this.frame_rate,
+                            latencyMode: 'realtime',
                             width: video_settings.width,
                             height: video_settings.height,
                             ...video_config
