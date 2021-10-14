@@ -4,7 +4,7 @@ import { MuxReceiver } from './mux-receiver.js';
 const key_frame_interval = 3;
 
 export function get_default_config_from_url(ffmpeg_lib_url) {
-    const protocol = url.indexOf('worker-dash') >= 0 ? 'dash' : 'hls';
+    const protocol = ffmpeg_lib_url.indexOf('worker-dash') >= 0 ? 'dash' : 'hls';
     return {
         ffmpeg_lib_url,
         protocol,
@@ -14,7 +14,7 @@ export function get_default_config_from_url(ffmpeg_lib_url) {
         },
         audio: {
             bitrate: 128 * 1000
-        }
+        },
         media_recorder: {
             video: {
                 codec: protocol === 'dash' ? 'vp9' : 'H264',
@@ -43,7 +43,7 @@ export function get_default_config_from_url(ffmpeg_lib_url) {
                     codec: protocol === 'dash' ? 'V_VP9' : 'V_MPEG4/ISO/AVC'
                 },
                 audio: {
-                    codec: 'A_OPUS'
+                    codec: 'A_OPUS',
                     bit_depth: 0 // 32 for pcm */
                 }
             }
@@ -157,7 +157,7 @@ export class Streamer extends EventTarget {
                     video_codec === 'copy' ?
                     ['-c:v', 'copy'] : // pass through the video data (no decoding or encoding)
                     ['-c:v', this.config.ffmpeg.video.codec, // re-encode video
-                     '-b:v', this.config.video.bitrate.toString()]) // set video bitrate
+                     '-b:v', this.config.video.bitrate.toString()]), // set video bitrate
                 ...this.ffmpeg_metadata,
                 ...(audio_codec === this.config.ffmpeg.audio.codec ||
                     audio_codec === 'copy' ?
@@ -262,7 +262,7 @@ export class Streamer extends EventTarget {
             const msg = e.detail;
             switch (msg.type) {
                 case 'ready':
-                    this.receiver.start(receiver_args(video_codec, audio_codec));
+                    this.receiver.start(this.receiver_args(video_codec, audio_codec));
                     break;
 
                 case 'error':
@@ -468,7 +468,7 @@ export class Streamer extends EventTarget {
             },
             webm_receiver: './mux-receiver.js',
             webm_receiver_data: { name: 'stream1' },
-            ...receiver_args(video_codec, audio_codec)
+            ...this.receiver_args(video_codec, audio_codec)
         });
     }
 

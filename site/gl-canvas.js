@@ -29,11 +29,12 @@ export class GlCanvas extends Canvas {
             }
         }), options);
         this.update_limiter = new UpdateLimiter();
+        this.destroyed = false;
     }
     // Allow rendering loop to be driven externally (e.g. by the audio encoder)
     // to avoid requestAnimationFrame (or indeed setInterval) throttling.
     onLoop() {
-        if (this.update_limiter.check()) {
+        if (this.update_limiter.check() && !this.destroyed) {
             const now = Date.now();
             this.checkRender();
             // Make sure we don't hog the main thread. Software rendering will take
@@ -50,14 +51,25 @@ export class GlCanvas extends Canvas {
     }
     // Prevent errors after destruction
     destroy() {
-        super.destroy();
+        this.destroyed = true;
+        if (this.gl) {
+            super.destroy();
+        }
         this.uniforms = {
             createTexture() {
                 return {};
             },
-            create() {}
+            create() {},
+            update() {}
         };
-        this.textures = {};
+        this.textures = {
+            createOrUpdate() {
+                return {
+                    then() {}
+                };
+            },
+            values: {}
+        };
         this.buffers = {
             values: {}
         };

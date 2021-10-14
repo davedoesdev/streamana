@@ -36,30 +36,34 @@ const initial_ffmpeg_lib_url = (localStorage.getItem('streamana-ffmpeg-lib-url')
 if (initial_ffmpeg_lib_url) {
     ffmpeg_lib_url_el.value = initial_ffmpeg_lib_url;
 }
-ffmpeg_lib_url_el.addEventListener('input', function () {
-    localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
-    if (this.value.trim()) {
+ffmpeg_lib_url_el.addEventListener('change', function () {
+    const value = this.value.trim();
+    localStorage.setItem('streamana-ffmpeg-lib-url', value);
+    if (value) {
         protocol_hls_el.disabled = true;
         protocol_dash_el.disabled = true;
+    } else {
+        protocol_hls_el.disabled = false;
+        protocol_dash_el.disabled = false;
     }
     set_ingestion();
 });
 
 const zoom_video_el = document.getElementById('zoom-video');
 zoom_video_el.checked = !!localStorage.getItem('streamana-zoom-video');
-zoom_video_el.addEventListener('input', function () {
+zoom_video_el.addEventListener('change', function () {
     localStorage.setItem('streamana-zoom-video', this.checked ? 'true' : '');
 });
 
 const lock_portrait_el = document.getElementById('lock-portrait');
 lock_portrait_el.checked = !!localStorage.getItem('streamana-lock-portrait');
-lock_portrait_el.addEventListener('input', function () {
+lock_portrait_el.addEventListener('change', function () {
     localStorage.setItem('streamana-lock-portrait', this.checked ? 'true' : '');
 });
 
 const greyscale_el = document.getElementById('greyscale');
 greyscale_el.checked = !!localStorage.getItem('streamana-greyscale');
-greyscale_el.addEventListener('input', function () {
+greyscale_el.addEventListener('change', function () {
     localStorage.setItem('streamana-greyscale', this.checked ? 'true' : '');
 });
 
@@ -116,13 +120,8 @@ let streamer_config;
 let video_config;
 const video_configs = new Map();
 
-function set_ingestion() {
-    const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
-                           ffmpeg_lib_url_el.placeholder.trim();
-
-    streamer_config = get_default_config_from_url(ffmpeg_lib_url);
-
-    if (streamer_config.protocol === 'dash') {
+function set_ingestion_protocol(protocol) {
+    if (protocol === 'dash') {
         protocol_hls_el.checked = false;
         protocol_dash_el.checked = true;
         ffmpeg_lib_url_el.placeholder = protocol_dash_el.value;
@@ -131,7 +130,20 @@ function set_ingestion() {
         protocol_dash_el.checked = false;
         ffmpeg_lib_url_el.placeholder = protocol_hls_el.value;
     }
+}
 
+set_ingestion_protocol(localStorage.getItem('streamana-ingestion-protocol'));
+
+async function set_ingestion() {
+    const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
+                           ffmpeg_lib_url_el.placeholder.trim();
+
+    streamer_config = get_default_config_from_url(ffmpeg_lib_url);
+
+    set_ingestion_protocol(streamer_config.protocol);
+    localStorage.setItem('streamana-ingestion-protocol', streamer_config.protocol);
+
+    video_config = null;
     let preferred_resolution = localStorage.getItem('streamana-resolution');
     if (preferred_resolution) {
         video_config = await max_video_config({
@@ -163,14 +175,14 @@ function set_ingestion() {
     }
 }
 
-set_ingestion();
+await set_ingestion();
 
-protocol_hls_el.addEventListener('input', function () {
+protocol_hls_el.addEventListener('change', function () {
     ffmpeg_lib_url_el.placeholder = protocol_hls_el.value;
     set_ingestion();
 });
 
-protocol_dash_el.addEventListener('input', function () {
+protocol_dash_el.addEventListener('change', function () {
     ffmpeg_lib_url_el.placeholder = protocol_dash_el.value;
     set_ingestion();
 });
@@ -259,7 +271,7 @@ async function start() {
             camera_icon_el.classList.add('off');
         }
         camera_el.addEventListener('click', camera_save);
-        greyscale_el.removeEventListener('input', greyscale);
+        greyscale_el.removeEventListener('change', greyscale);
         camera_swap_el.classList.add('d-none');
         camera_swap_el.removeEventListener('click', about_face);
         canvas_el_parent.classList.add('mx-auto');
@@ -321,8 +333,8 @@ async function start() {
         lock_portrait_el.disabled = false;
         zoom_video_el.disabled = false;
         resolution_el.disabled = false;
-        protocol_hls_el.disabled = false;
-        protocol_dash_el.disabled = false;
+        protocol_hls_el.disabled = ffmpeg_lib_url_el.value.trim();
+        protocol_dash_el.disabled = ffmpeg_lib_url_el.value.trim();;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -419,8 +431,8 @@ async function start() {
             width: video_config.width,
             height: video_config.height,
             frameRate: {
-                ideal: streamer.config.video.framerate,
-                max: streamer.config.video.framerate
+                ideal: streamer_config.video.framerate,
+                max: streamer_config.video.framerate
             },
             facingMode: requested_facing_mode
         };
@@ -578,7 +590,7 @@ async function start() {
 
         // tell shader whether to greyscale
         gl_canvas.setUniform('u_greyscale', greyscale_el.checked);
-        greyscale_el.addEventListener('input', greyscale);
+        greyscale_el.addEventListener('change', greyscale);
 
         // tell shader camera hasn't started
         gl_canvas.setUniform('u_active', false);
@@ -616,7 +628,7 @@ async function start() {
         // capture video from the canvas
         // Note: Safari on iOS doesn't get any data, might be related to
         // https://bugs.webkit.org/show_bug.cgi?id=181663
-        canvas_stream = canvas_el.captureStream(target_frame_rate);
+        canvas_stream = canvas_el.captureStream(streamer_config.video.framerate);
 
         // add audio to canvas stream
         audio_dest = audio_context.createMediaStreamDestination();
