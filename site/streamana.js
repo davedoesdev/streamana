@@ -1,16 +1,13 @@
 import { GlCanvas } from './gl-canvas.js';
 import {
-    HLS,
-    video_encoder_codec,
-    videoBitsPerSecond
-} from './hls.js';
+    get_default_config_from_url,
+    Streamer
+} from './streamer.js';
 import shader from './shader.js';
 import {
     supported_video_configs,
     max_video_config,
 } from './resolution.js';
-
-const target_frame_rate = 30;
 
 const ingestion_url_el = document.getElementById('ingestion-url');
 ingestion_url_el.value = localStorage.getItem('streamana-ingestion-url');
@@ -41,6 +38,11 @@ if (initial_ffmpeg_lib_url) {
 }
 ffmpeg_lib_url_el.addEventListener('input', function () {
     localStorage.setItem('streamana-ffmpeg-lib-url', this.value);
+    if (this.value.trim()) {
+        protocol_hls_el.disabled = true;
+        protocol_dash_el.disabled = true;
+    }
+    set_ingestion();
 });
 
 const zoom_video_el = document.getElementById('zoom-video');
@@ -106,37 +108,74 @@ camera_el.addEventListener('click', camera_save);
 
 const camera_swap_el = document.getElementById('camera-swap');
 
-let video_config;
-let preferred_resolution = localStorage.getItem('streamana-resolution');
-if (preferred_resolution) {
-    video_config = await max_video_config({
-        ...JSON.parse(preferred_resolution),
-        codec: video_encoder_codec,
-        bitrate: videoBitsPerSecond
-    }, true);
-}
-if (!video_config) {
-    video_config =  await max_video_config({
-        width: 1280,
-        height: 720,
-        ratio: 16/9,
-        codec: video_encoder_codec,
-        bitrate: videoBitsPerSecond
-    }, true);
-}
+const protocol_hls_el = document.getElementById('protocol-hls');
+const protocol_dash_el = document.getElementById('protocol-dash');
 const resolution_el = document.getElementById('resolution');
+
+let streamer_config;
+let video_config;
 const video_configs = new Map();
-for (let config of (await supported_video_configs({
-    codec: video_encoder_codec,
-    bitrate: videoBitsPerSecond
-}, true)).filter(c => c.ratio >= 1)) {
-    const option = document.createElement('option');
-    option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
-    option.selected = config.label === video_config.label;
-    resolution_el.appendChild(option);
-    video_configs.set(option.innerText, config);
+
+function set_ingestion() {
+    const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
+                           ffmpeg_lib_url_el.placeholder.trim();
+
+    streamer_config = get_default_config_from_url(ffmpeg_lib_url);
+
+    if (streamer_config.protocol === 'dash') {
+        protocol_hls_el.checked = false;
+        protocol_dash_el.checked = true;
+        ffmpeg_lib_url_el.placeholder = protocol_dash_el.value;
+    } else {
+        protocol_hls_el.checked = true;
+        protocol_dash_el.checked = false;
+        ffmpeg_lib_url_el.placeholder = protocol_hls_el.value;
+    }
+
+    let preferred_resolution = localStorage.getItem('streamana-resolution');
+    if (preferred_resolution) {
+        video_config = await max_video_config({
+            ...JSON.parse(preferred_resolution),
+            ...streamer_config.video,
+            ...streamer_config.webcodecs.video
+        }, true);
+    }
+    if (!video_config) {
+        video_config =  await max_video_config({
+            width: 1280,
+            height: 720,
+            ratio: 16/9,
+            ...streamer_config.video,
+            ...streamer_config.webcodecs.video
+        }, true);
+    }
+
+    resolution_el.innerHTML = '';
+    for (let config of (await supported_video_configs({
+        ...streamer_config.video,
+        ...streamer_config.webcodecs.video
+    }, true)).filter(c => c.ratio >= 1)) {
+        const option = document.createElement('option');
+        option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
+        option.selected = config.label === video_config.label;
+        resolution_el.appendChild(option);
+        video_configs.set(option.innerText, config);
+    }
 }
-resolution_el.addEventListener('change', function (ev) {
+
+set_ingestion();
+
+protocol_hls_el.addEventListener('input', function () {
+    ffmpeg_lib_url_el.placeholder = protocol_hls_el.value;
+    set_ingestion();
+});
+
+protocol_dash_el.addEventListener('input', function () {
+    ffmpeg_lib_url_el.placeholder = protocol_dash_el.value;
+    set_ingestion();
+});
+
+resolution_el.addEventListener('change', function () {
     video_config = video_configs.get(this.value);
     localStorage.setItem('streamana-resolution', JSON.stringify({
         width: video_config.width,
@@ -145,7 +184,7 @@ resolution_el.addEventListener('change', function (ev) {
     }));
 });
 
-let hls;
+let streamer;
 
 async function start() {
     const ingestion_url = ingestion_url_el.value.trim();
@@ -172,6 +211,8 @@ async function start() {
     lock_portrait_el.disabled = true;
     zoom_video_el.disabled = true;
     resolution_el.disabled = true;
+    protocol_hls_el.disabled = true;
+    protocol_dash_el.disabled = true;
     waiting_el.classList.remove('d-none');
     mic_el.removeEventListener('click', mic_save);
     camera_el.removeEventListener('click', camera_save);
@@ -267,8 +308,9 @@ async function start() {
                 track.stop();
             }
         }
-        if (hls) {
-            hls.end(!!err);
+        if (streamer) {
+            streamer.end(!!err);
+            streamer = null;
         }
 
         go_live_el.checked = false;
@@ -279,6 +321,8 @@ async function start() {
         lock_portrait_el.disabled = false;
         zoom_video_el.disabled = false;
         resolution_el.disabled = false;
+        protocol_hls_el.disabled = false;
+        protocol_dash_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -356,7 +400,7 @@ async function start() {
         camera_swap_el.removeEventListener('click', about_face);
 
         async function finish() {
-            await hls.start();
+            await streamer.start();
             mic_el.addEventListener('click', media_toggle);
             camera_el.addEventListener('click', media_toggle);
             camera_swap_el.addEventListener('click', about_face);
@@ -375,8 +419,8 @@ async function start() {
             width: video_config.width,
             height: video_config.height,
             frameRate: {
-                ideal: target_frame_rate,
-                max: target_frame_rate
+                ideal: streamer.config.video.framerate,
+                max: streamer.config.video.framerate
             },
             facingMode: requested_facing_mode
         };
@@ -593,11 +637,15 @@ async function start() {
         audio_source = silence;
         audio_source.connect(audio_dest);
 
-        // HLS from the canvas stream to the ingestion URL
-        hls = new HLS(canvas_stream, audio_context, ingestion_url, ffmpeg_lib_url, target_frame_rate, lock_portrait);
-        hls.addEventListener('run', () => console.log('HLS running'));
-        hls.addEventListener('exit', ev => {
-            const msg = `HLS exited with status ${ev.detail.code}`;
+        // Stream from the canvas stream to the ingestion URL
+        streamer = new Streamer(canvas_stream,
+                                audio_context,
+                                ingestion_url,
+                                streamer_config,
+                                lock_portrait);
+        streamer.addEventListener('run', () => console.log('Streamer running'));
+        streamer.addEventListener('exit', ev => {
+            const msg = `Streamer exited with status ${ev.detail.code}`;
             if (ev.detail.code === 0) {
                 console.log(msg);
                 cleanup();
@@ -605,8 +653,8 @@ async function start() {
                 cleanup(msg);
             }
         });
-        hls.addEventListener('error', cleanup);
-        hls.addEventListener('start', function () {
+        streamer.addEventListener('error', cleanup);
+        streamer.addEventListener('start', function () {
             if (done) {
                 this.end(true);
             }
@@ -616,7 +664,7 @@ async function start() {
             go_live_el.disabled = false;
             update();
         });
-        hls.addEventListener('update', update);
+        streamer.addEventListener('update', update);
 
         await start_media(facing_mode);
     } catch (ex) {
@@ -626,5 +674,5 @@ async function start() {
 
 function stop() {
     go_live_el.disabled = true;
-    hls.end();
+    streamer.end();
 }

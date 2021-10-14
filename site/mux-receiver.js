@@ -8,7 +8,7 @@ export class MuxReceiver extends EventTarget {
         }, 0);
     }
 
-    start({ ffmpeg_lib_url, ffmpeg_args, base_url }) {
+    start({ ffmpeg_lib_url, ffmpeg_args, base_url, protocol }) {
         this.worker = new Worker(ffmpeg_lib_url);
         this.worker.onerror = this.onerror.bind(this);
         this.worker.onmessage = e => {
@@ -48,7 +48,8 @@ export class MuxReceiver extends EventTarget {
                 case 'start-stream':
                     this.worker.postMessage({
                         type: 'base-url',
-                        data: base_url
+                        data: base_url,
+                        protocol
                     });
                     // falls through
                 case 'sending':
