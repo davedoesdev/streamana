@@ -3,7 +3,7 @@
 == Description
 
 Streamana is a Web page which streams your camera and microphone to YouTube Live
-(or any other HLS receiver). It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
+(or any other HLS or DASH receiver). It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
 https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
 
 == Demo
@@ -15,7 +15,9 @@ Use Chrome 95 or later.
 .. Click _CREATE_ and then select _Go Live_ from the drop-down menu.
 .. Under _Select stream key_, select _Create new stream key_.
 .. Give your key a name.
-.. You must select _HLS_ as the streaming protocol.
+.. You must select _HLS_ as the streaming protocol. Note: YouTube DASH ingestion is only available
+   by using the Youtube API. See https://developers.google.com/youtube/v3/live/guides/encoding-with-dash#url-structure[here]
+   for more details.
 .. Click _CREATE_.
 .. Make sure the key you created is selected.
 .. Click _COPY_ next to _Stream URL_.
@@ -34,7 +36,7 @@ You can also change various options:
 ** Lock the camera to portrait mode (where available, e.g. mobile phones).
 ** Zoom the camera to fill the page.
 ** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
-   the HLS encoding.
+   the HLS or DASH encoding.
 
 == Customisation
 
@@ -46,16 +48,16 @@ so you can change this to add video effects or overlays. The shader already hand
 resizing and rotating the video in `main()`. The optional greyscale conversion is in
 the `tpix()` function.
 
-The page's functionality is defined in link:site/streamana.js[] and link:site/hls.js[].
+The page's functionality is defined in link:site/streamana.js[] and link:site/streamer.js[].
 
-link:site/hls.js[] exports a class, `HLS`, which does the heavy lifting:
+link:site/streamer.js[] exports a class, `Streamer`, which does the heavy lifting:
 
 * The constructor takes the following arguments:
 ** The https://developer.mozilla.org/en-US/docs/Web/API/MediaStream[`MediaStream`]
    containing your video and audio tracks. Note that link:site/streamana.js[] supplies
    blank video when the camera is hidden and silent audio when the microphone is muted.
 ** The ingestion URL.
-** The URL of `ffmpeg-worker-hls.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
+** The URL of `ffmpeg-worker-hls.js` or `ffmpeg-worker-dash.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
    This allows your application (or the end user if required) to supply its own version,
    in accordance with LGPL.
 ** The desired video frame rate.
@@ -63,7 +65,7 @@ link:site/hls.js[] exports a class, `HLS`, which does the heavy lifting:
 * Call the `async start()` function to start streaming.
 * Call the `end()` function to stop streaming.
 
-`HLS` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
+`Streamer` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
 and dispatches the following events:
 
 * `start` when streaming has started.
@@ -80,7 +82,7 @@ Note that https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] is licensed under 
 Streamana runs it inside a Web Worker and communicates with it via message passing.
 The end user can replace the version used by changing the URL in the user interface.
 
-Note also that the https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] HLS distribution
-contains no H.264 or MP4 code. All encoding is done by the browser using
+Note also that the https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] HLS and DASH
+distributions contain no H.264 or MP4 code. All encoding is done by the browser using
 https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder[`MediaRecorder`] or
 https://www.w3.org/TR/webcodecs/[WebCodecs].
