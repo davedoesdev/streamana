@@ -150,6 +150,7 @@ export class Streamer extends EventTarget {
         return {
             ffmpeg_lib_url: this.config.ffmpeg_lib_url,
             ffmpeg_args: [
+                //'-loglevel', 'debug',
                 '-i', '/work/stream1',
                 '-map', '0:v',
                 '-map', '0:a',

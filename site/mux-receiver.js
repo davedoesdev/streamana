@@ -18,7 +18,6 @@ export class MuxReceiver extends EventTarget {
                     this.worker.postMessage({
                         type: 'run',
                         arguments: [
-                            '-loglevel', 'debug',
                             '-seekable', '0',
                             ...ffmpeg_args,
                             ...(protocol === 'dash' ? [
