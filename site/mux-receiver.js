@@ -57,7 +57,10 @@ export class MuxReceiver extends EventTarget {
                     this.worker.postMessage({
                         type: 'base-url',
                         data: base_url,
-                        protocol
+                        protocol,
+                        options: protocol === 'dash' ? {
+                            method: 'PUT'
+                        } : {}
                     });
                     // falls through
                 case 'sending':
