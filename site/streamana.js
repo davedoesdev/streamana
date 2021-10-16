@@ -9,9 +9,6 @@ import {
     max_video_config,
 } from './resolution.js';
 
-const ingestion_url_el = document.getElementById('ingestion-url');
-ingestion_url_el.value = localStorage.getItem('streamana-ingestion-url');
-
 const go_live_el = document.getElementById('go-live');
 go_live_el.disabled = false;
 go_live_el.addEventListener('click', function () {
@@ -37,15 +34,7 @@ if (initial_ffmpeg_lib_url) {
     ffmpeg_lib_url_el.value = initial_ffmpeg_lib_url;
 }
 ffmpeg_lib_url_el.addEventListener('change', function () {
-    const value = this.value.trim();
-    localStorage.setItem('streamana-ffmpeg-lib-url', value);
-    if (value) {
-        protocol_hls_el.disabled = true;
-        protocol_dash_el.disabled = true;
-    } else {
-        protocol_hls_el.disabled = false;
-        protocol_dash_el.disabled = false;
-    }
+    localStorage.setItem('streamana-ffmpeg-lib-url', this.value.trim());
     set_ingestion();
 });
 
@@ -112,6 +101,7 @@ camera_el.addEventListener('click', camera_save);
 
 const camera_swap_el = document.getElementById('camera-swap');
 
+const ingestion_url_el = document.getElementById('ingestion-url');
 const protocol_hls_el = document.getElementById('protocol-hls');
 const protocol_dash_el = document.getElementById('protocol-dash');
 const resolution_el = document.getElementById('resolution');
@@ -134,49 +124,6 @@ function set_ingestion_protocol(protocol) {
 
 set_ingestion_protocol(localStorage.getItem('streamana-ingestion-protocol'));
 
-async function set_ingestion() {
-    const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
-                           ffmpeg_lib_url_el.placeholder.trim();
-
-    streamer_config = get_default_config_from_url(ffmpeg_lib_url);
-
-    set_ingestion_protocol(streamer_config.protocol);
-    localStorage.setItem('streamana-ingestion-protocol', streamer_config.protocol);
-
-    video_config = null;
-    let preferred_resolution = localStorage.getItem('streamana-resolution');
-    if (preferred_resolution) {
-        video_config = await max_video_config({
-            ...JSON.parse(preferred_resolution),
-            ...streamer_config.video,
-            ...streamer_config.webcodecs.video
-        }, true);
-    }
-    if (!video_config) {
-        video_config =  await max_video_config({
-            width: 1280,
-            height: 720,
-            ratio: 16/9,
-            ...streamer_config.video,
-            ...streamer_config.webcodecs.video
-        }, true);
-    }
-
-    resolution_el.innerHTML = '';
-    for (let config of (await supported_video_configs({
-        ...streamer_config.video,
-        ...streamer_config.webcodecs.video
-    }, true)).filter(c => c.ratio >= 1)) {
-        const option = document.createElement('option');
-        option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
-        option.selected = config.label === video_config.label;
-        resolution_el.appendChild(option);
-        video_configs.set(option.innerText, config);
-    }
-}
-
-await set_ingestion();
-
 protocol_hls_el.addEventListener('change', function () {
     ffmpeg_lib_url_el.placeholder = protocol_hls_el.value;
     set_ingestion();
@@ -196,7 +143,85 @@ resolution_el.addEventListener('change', function () {
     }));
 });
 
+const busy_el = document.getElementById('busy');
+
+async function set_ingestion() {
+    busy_el.classList.remove('d-none');
+
+    try {
+        const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
+                               ffmpeg_lib_url_el.placeholder.trim();
+
+        const protocol = streamer_config ? streamer_config.protocol : null;
+        streamer_config = get_default_config_from_url(ffmpeg_lib_url);
+
+        set_ingestion_protocol(streamer_config.protocol);
+        localStorage.setItem('streamana-ingestion-protocol', streamer_config.protocol);
+
+        if (ffmpeg_lib_url_el.value.trim()) {
+            protocol_hls_el.disabled = true;
+            protocol_dash_el.disabled = true;
+        } else {
+            protocol_hls_el.disabled = false;
+            protocol_dash_el.disabled = false;
+        }
+
+        if (streamer_config.protocol !== protocol) {
+            ingestion_url_el.value = (localStorage.getItem(
+                streamer_config.protocol === 'dash' ?
+                    'streamana-dash-ingestion-url' :
+                    'streamana-hls-ingestion-url') || '').trim();
+        }
+
+        video_config = null;
+        let preferred_resolution = localStorage.getItem('streamana-resolution');
+        if (preferred_resolution) {
+            video_config = await max_video_config({
+                ...JSON.parse(preferred_resolution),
+                ...streamer_config.video,
+                ...streamer_config.webcodecs.video
+            }, true);
+        }
+        if (!video_config) {
+            video_config =  await max_video_config({
+                width: 1280,
+                height: 720,
+                ratio: 16/9,
+                ...streamer_config.video,
+                ...streamer_config.webcodecs.video
+            }, true);
+        }
+
+        const configs = (await supported_video_configs({
+            ...streamer_config.video,
+            ...streamer_config.webcodecs.video
+        }, true)).filter(c => c.ratio >= 1);
+
+        resolution_el.innerHTML = '';
+
+        for (let config of configs) {
+            const option = document.createElement('option');
+            option.innerHTML = `${config.width}x${config.height} &mdash; ${config.label}`;
+            option.selected = video_config && (config.label === video_config.label);
+            resolution_el.appendChild(option);
+            video_configs.set(option.innerText, config);
+        }
+
+        return streamer_config;
+    } finally {
+        busy_el.classList.add('d-none');
+    }
+}
+
+await set_ingestion();
+
+document.body.classList.remove('d-none');
+document.documentElement.classList.remove('busy');
+
 let streamer;
+
+// ingestion url doesn't change when protocol changes due to ffmpeg_lib_url
+// why does clicking on menu close the menu after change ffmpeg_lib_url?
 
 async function start() {
     const ingestion_url = ingestion_url_el.value.trim();
@@ -205,7 +230,10 @@ async function start() {
         go_live_el.checked = false;
         return;
     }
-    localStorage.setItem('streamana-ingestion-url', ingestion_url);
+    localStorage.setItem(
+        streamer_config.protocol === 'dash' ? 'streamana-dash-ingestion-url' :
+                                              'streamana-hls-ingestion-url',
+        ingestion_url);
 
     if (!video_config) {
         console.error('No video config');
@@ -251,7 +279,7 @@ async function start() {
 
     function cleanup(err) {
         if (err) {
-            console.error(err.toString());
+            console.error(err);
         }
         if (done) {
             return;
@@ -445,7 +473,7 @@ async function start() {
             });
         } catch (ex) {
             console.warn(`Failed to get user media (need_audio=${need_audio} need_video=${need_video})`);
-            console.error(ex.toString());
+            console.error(ex);
             if (need_audio && need_video) {
                 console.warn("Retrying with only video");
                 try {
@@ -455,7 +483,7 @@ async function start() {
                     });
                 } catch (ex) {
                     console.warn('Failed to get user video, retrying with only audio');
-                    console.error(ex.toString());
+                    console.error(ex);
                     try {
                         media_stream = await navigator.mediaDevices.getUserMedia({
                             audio: true,
@@ -463,7 +491,7 @@ async function start() {
                         });
                     } catch (ex) {
                         console.warn('Failed to get user audio');
-                        console.error(ex.toString());
+                        console.error(ex);
                     }
                 }
             }

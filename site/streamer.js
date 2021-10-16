@@ -102,7 +102,7 @@ export class Streamer extends EventTarget {
                     await this.webcodecs();
                     console.log("Using WebCodecs");
                 } catch (ex) {
-                    console.warn(ex.toString());
+                    console.warn(ex);
                     await mp4();
                 }
             } else {
@@ -117,7 +117,7 @@ export class Streamer extends EventTarget {
                 await this.media_recorder(`video/webm;codecs=${codecs}`);
                 console.log(`Using MediaRecorder WebM (${codecs})`);
             } catch (ex) {
-                console.warn(ex.toString());
+                console.warn(ex);
                 await webcodecs();
             }
         } else {
@@ -153,17 +153,17 @@ export class Streamer extends EventTarget {
                 '-i', '/work/stream1',
                 '-map', '0:v',
                 '-map', '0:a',
-                ...(video_codec === this.config.ffmpeg.video.codec ||
-                    video_codec === 'copy' ?
-                    ['-c:v', 'copy'] : // pass through the video data (no decoding or encoding)
-                    ['-c:v', this.config.ffmpeg.video.codec, // re-encode video
-                     '-b:v', this.config.video.bitrate.toString()]), // set video bitrate
+                '-c:v', video_codec === this.config.ffmpeg.video.codec ||
+                        video_codec === 'copy' ?
+                        'copy' : // pass through the video data (no decoding or encoding)
+                        this.config.ffmpeg.video.codec, // re-encode video
+                '-b:v', this.config.video.bitrate.toString(), // set video bitrate
                 ...this.ffmpeg_metadata,
-                ...(audio_codec === this.config.ffmpeg.audio.codec ||
-                    audio_codec === 'copy' ?
-                    ['-c:a', 'copy'] : // pass through the audio data
-                    ['-c:a', this.config.ffmpeg.audio.codec,  // re-encode audio
-                     '-b:a', this.config.audio.bitrate.toString()]) // set audio bitrate
+                '-c:a', audio_codec === this.config.ffmpeg.audio.codec ||
+                        audio_codec === 'copy' ?
+                        'copy' : // pass through the audio data
+                        this.config.ffmpeg.audio.codec, // re-encode audio
+                '-b:a', this.config.audio.bitrate.toString() // set audio bitrate
             ],
             base_url: this.base_url,
             protocol: this.config.protocol
