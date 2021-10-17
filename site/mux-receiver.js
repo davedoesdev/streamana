@@ -23,16 +23,16 @@ export class MuxReceiver extends EventTarget {
                             ...(protocol === 'dash' ? [
                                 '-f', 'dash', // use dash encoder
                                 '-seg_duration', '2', // 2 second segments
-                                '-window_size', '2',
-                                '-streaming', '1',
-                                '-dash_segment_type', 'webm',
+                                '-window_size', '2', // two chunks in the list at a time
+                                '-streaming', '1', // fragment data
+                                '-dash_segment_type', 'webm', // container type
                                 '/outbound/output.mpd'
                             ] : [
                                 '-f', 'hls', // use hls encoder
                                 '-hls_time', '2', // 2 second HLS chunks
                                 '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
                                 '-hls_list_size', '2', // two chunks in the list at a time
-                                '-hls_flags', 'split_by_time',
+                                '-hls_flags', 'split_by_time', // if you don't have < 2s keyframes
                                 '/outbound/output.m3u8' // path to media playlist file in virtual FS,
                                                         // must be under /outbound
                             ])
