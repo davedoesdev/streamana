@@ -59,7 +59,7 @@ export class MuxReceiver extends EventTarget {
                         data: base_url,
                         protocol,
                         options: protocol === 'dash' ? {
-                            method: 'PUT'
+                            //method: 'PUT'
                         } : {}
                     });
                     // falls through
