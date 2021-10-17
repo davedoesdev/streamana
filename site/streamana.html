@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html class="busy">
   <head>
     <title>Streamana</title>
     <meta charset="utf-8">
@@ -9,7 +9,8 @@
     <link href="./streamana.css" rel="stylesheet">
     <script type="module" src="./streamana.js"></script>
   </head>
-  <body class="d-flex flex-column vh-100">
+  <body class="d-flex flex-column vh-100 d-none">
+    <div id="busy" class="busy"></div>
     <nav id="nav" class="navbar navbar-light bg-light flex-grow-0">
       <div class="container-fluid">
         <div class="row gx-2 gy-2 gy-sm-0 w-100 mx-0 align-items-center">
@@ -66,8 +67,21 @@
           <label for="zoom-video" class="form-check-label">Minimize vertical bars in local video display</label>
         </div>
         <div class="pt-4">
+          <label class="form-label">Ingestion protocol</label>
+          <div>
+          <div class="form-check form-check-inline">
+            <input id="protocol-hls" name="protocol" class="form-check-input" type="radio" value="ffmpeg-worker-hls.js">
+            <label for="protocol-hls" class="form-check-label">HLS (H.264)</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input id="protocol-dash" name="protocol" class="form-check-input" type="radio" value="ffmpeg-worker-dash.js">
+            <label for="protocol-dash" class="form-check-label">DASH (VP9)</label>
+          </div>
+          </div>
+        </div>
+        <div class="pt-4">
           <label for="ffmpeg-lib-url" class="form-label">FFmpeg library URL</label>
-          <input id="ffmpeg-lib-url" class="form-control" placeholder="ffmpeg-worker-hls.js" type="text">
+          <input id="ffmpeg-lib-url" class="form-control" type="text">
         </div>
     </div>
     <div id="error-alert" class="alert alert-danger alert-dismissible fade mb-0 flex-grow-0" role="alert">

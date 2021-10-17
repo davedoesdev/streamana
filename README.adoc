@@ -3,7 +3,7 @@
 == Description
 
 Streamana is a Web page which streams your camera and microphone to YouTube Live
-(or any other HLS receiver). It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
+(or any other HLS or DASH receiver). It uses https://github.com/davedoesdev/webm-muxer.js[webm-muxer.js] and
 https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
 
 == Demo
@@ -15,7 +15,9 @@ Use Chrome 95 or later.
 .. Click _CREATE_ and then select _Go Live_ from the drop-down menu.
 .. Under _Select stream key_, select _Create new stream key_.
 .. Give your key a name.
-.. You must select _HLS_ as the streaming protocol.
+.. You must select _HLS_ as the streaming protocol. Note: YouTube DASH ingestion is only available
+   by using the Youtube API. See https://developers.google.com/youtube/v3/live/guides/encoding-with-dash#url-structure[here]
+   for more details.
 .. Click _CREATE_.
 .. Make sure the key you created is selected.
 .. Click _COPY_ next to _Stream URL_.
@@ -33,8 +35,9 @@ You can also change various options:
 ** Convert your camera's video to greyscale.
 ** Lock the camera to portrait mode (where available, e.g. mobile phones).
 ** Zoom the camera to fill the page.
+** Switch between HLS and DASH encoding.
 ** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
-   the HLS encoding.
+   the HLS or DASH encoding.
 
 == Customisation
 
@@ -46,24 +49,101 @@ so you can change this to add video effects or overlays. The shader already hand
 resizing and rotating the video in `main()`. The optional greyscale conversion is in
 the `tpix()` function.
 
-The page's functionality is defined in link:site/streamana.js[] and link:site/hls.js[].
+The page's functionality is defined in link:site/streamana.js[] and link:site/streamer.js[].
 
-link:site/hls.js[] exports a class, `HLS`, which does the heavy lifting:
+link:site/streamer.js[] exports a function, `get_default_config_from_url`, and a class,
+`Streamer`, which does the heavy lifting.
+
+You should first call `get_default_config_from_url`. It takes a single argument,
+the URL of `ffmpeg-worker-hls.js` or `ffmpeg-worker-dash.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
+This allows your application (or the end user if required) to supply its own version,
+in accordance with LGPL. It can be a relative path (i.e. just `ffmpeg-worker-hls.js` or
+`ffmpeg-worker-dash.js`).
+
+`get_default_config_from_url` determines the streaming protocol (`hls` or `dash`) and returns
+the default configuration for the protocol:
+
+```js
+{
+    ffmpeg_lib_url, // the URL you passed to `get_default_config_from_url`
+    protocol, // `hls` or `dash`
+    video: { // properies of the video you will be supplying
+        bitrate: 2500 * 1000,
+        framerate: 30
+    },
+    audio: { // properties of the audio you will be supplying
+        bitrate: 128 * 1000
+    },
+    media_recorder: { // default options for MediaRecorder if it ends up being used
+        video: {
+            codec: protocol === 'dash' ? 'vp9' : 'H264', // video codec
+        },
+        audio: {
+            codec: 'opus' // audio codec
+        },
+        webm: true, // container format
+        mp4: false // if true, requires ffmpeg-worker-hls.js or ffmpeg-worker-dash.js
+                   // to be configured with MP4 support (which is not the default)
+    },
+    webcodecs: { // default options for WebCodecs if it ends up being used
+        video: {
+            // video codec and options
+            ...(protocol === 'dash' ? {
+                codec: 'vp09.00.10.08.01'
+            } : {
+                codec: 'avc1.42E01E' /*'avc1.42001E'*/,
+                avc: { format: 'annexb' }
+            })
+        },
+        audio: {
+            codec: 'opus' /*'pcm'*/, // audio codec
+        },
+        webm_muxer: { // options for webm-muxer.js
+            video: {
+                codec: protocol === 'dash' ? 'V_VP9' : 'V_MPEG4/ISO/AVC'
+            },
+            audio: {
+                codec: 'A_OPUS',
+                bit_depth: 0 // 32 for pcm */
+            }
+        }
+    },
+    ffmpeg: { // desired ffmpeg output codecs
+        // Note: If the encoded stream already uses the desired codec then
+        // it will pass `copy` instead. For example, if your browser encodes
+        // your video to H.264 already then `copy` will be used instead of
+        // `libx264`. This means you can use `ffmpeg-worker-hls.js` or
+        // `ffmpeg-worker-dash.js` that doesn't contain a H.264 encoder.
+        video: {
+            codec: protocol === 'dash' ? 'libvpx-vp9' : 'libx264'
+        },
+        audio: {
+            codec: protocol === 'dash' ? 'libopus' : 'aac'
+        }
+    }
+};
+```
+
+You application can modify the returned configuration before creating a `Streamer` object.
+
+Use the `Streamer` class as follows:
 
 * The constructor takes the following arguments:
 ** The https://developer.mozilla.org/en-US/docs/Web/API/MediaStream[`MediaStream`]
    containing your video and audio tracks. Note that link:site/streamana.js[] supplies
    blank video when the camera is hidden and silent audio when the microphone is muted.
+** An https://developer.mozilla.org/en-US/docs/Web/API/AudioContext[AudioContext] instance.
+   This is used to create a persistent audio generator for triggering updates to
+   avoid browser timer throttling. If you don't already use one in your application,
+   you can just `new AudioContext()`.
 ** The ingestion URL.
-** The URL of `ffmpeg-worker-hls.js` in https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js].
-   This allows your application (or the end user if required) to supply its own version,
-   in accordance with LGPL.
-** The desired video frame rate.
+** The configuration returned by calling `get_default_config_from_url` (see above),
+   optionally modified by your application.
 ** Whether the video is rotated.
 * Call the `async start()` function to start streaming.
 * Call the `end()` function to stop streaming.
 
-`HLS` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
+`Streamer` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
 and dispatches the following events:
 
 * `start` when streaming has started.
@@ -80,7 +160,7 @@ Note that https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] is licensed under 
 Streamana runs it inside a Web Worker and communicates with it via message passing.
 The end user can replace the version used by changing the URL in the user interface.
 
-Note also that the https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] HLS distribution
-contains no H.264 or MP4 code. All encoding is done by the browser using
+Note also that the https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] HLS and DASH
+distributions contain no H.264 or MP4 code. All encoding is done by the browser using
 https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder[`MediaRecorder`] or
 https://www.w3.org/TR/webcodecs/[WebCodecs].

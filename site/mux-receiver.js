@@ -8,7 +8,7 @@ export class MuxReceiver extends EventTarget {
         }, 0);
     }
 
-    start({ ffmpeg_lib_url, ffmpeg_args, base_url }) {
+    start({ ffmpeg_lib_url, ffmpeg_args, base_url, protocol }) {
         this.worker = new Worker(ffmpeg_lib_url);
         this.worker.onerror = this.onerror.bind(this);
         this.worker.onmessage = e => {
@@ -18,16 +18,24 @@ export class MuxReceiver extends EventTarget {
                     this.worker.postMessage({
                         type: 'run',
                         arguments: [
-                            '-loglevel', 'debug',
                             '-seekable', '0',
                             ...ffmpeg_args,
-                            '-f', 'hls', // use hls encoder
-                            '-hls_time', '2', // 2 second HLS chunks
-                            '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
-                            '-hls_list_size', '2', // two chunks in the list at a time
-                            '-hls_flags', 'split_by_time',
-                            '/outbound/output.m3u8' // path to media playlist file in virtual FS,
-                                                    // must be under /outbound
+                            ...(protocol === 'dash' ? [
+                                '-f', 'dash', // use dash encoder
+                                '-seg_duration', '2', // 2 second segments
+                                '-window_size', '2', // two chunks in the list at a time
+                                '-streaming', '1', // fragment data
+                                '-dash_segment_type', 'webm', // container type
+                                '/outbound/output.mpd'
+                            ] : [
+                                '-f', 'hls', // use hls encoder
+                                '-hls_time', '2', // 2 second HLS chunks
+                                '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
+                                '-hls_list_size', '2', // two chunks in the list at a time
+                                '-hls_flags', 'split_by_time', // if you don't have < 2s keyframes
+                                '/outbound/output.m3u8' // path to media playlist file in virtual FS,
+                                                        // must be under /outbound
+                            ])
                         ],
                         MEMFS: [
                             { name: 'stream1' },
@@ -48,7 +56,11 @@ export class MuxReceiver extends EventTarget {
                 case 'start-stream':
                     this.worker.postMessage({
                         type: 'base-url',
-                        data: base_url
+                        data: base_url,
+                        protocol,
+                        options: protocol === 'dash' ? {
+                            //method: 'PUT'
+                        } : {}
                     });
                     // falls through
                 case 'sending':

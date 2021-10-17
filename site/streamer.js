@@ -1,20 +1,71 @@
 import { UpdateLimiter } from './update-limiter.js';
 import { MuxReceiver } from './mux-receiver.js';
 
-const audioBitsPerSecond = 128 * 1000;
-export const videoBitsPerSecond = 2500 * 1000;
 const key_frame_interval = 3;
 
-export const video_encoder_codec = 'avc1.42E01E' /*'avc1.42001E'*/;
+export function get_default_config_from_url(ffmpeg_lib_url) {
+    const protocol = ffmpeg_lib_url.indexOf('worker-dash') >= 0 ? 'dash' : 'hls';
+    return {
+        ffmpeg_lib_url,
+        protocol,
+        video: {
+            bitrate: 2500 * 1000,
+            framerate: 30
+        },
+        audio: {
+            bitrate: 128 * 1000
+        },
+        media_recorder: {
+            video: {
+                codec: protocol === 'dash' ? 'vp9' : 'H264',
+            },
+            audio: {
+                codec: 'opus'
+            },
+            webm: true,
+            mp4: false // requires ffmpeg-worker-hls.js or ffmpeg-worker-dash.js
+                       // to be configured with MP4 support (which is not the default)
+        },
+        webcodecs: {
+            video: {
+                ...(protocol === 'dash' ? {
+                    codec: 'vp09.00.10.08.01'
+                } : {
+                    codec: 'avc1.42E01E' /*'avc1.42001E'*/,
+                    avc: { format: 'annexb' }
+                })
+            },
+            audio: {
+                codec: 'opus' /*'pcm'*/,
+            },
+            webm_muxer: {
+                video: {
+                    codec: protocol === 'dash' ? 'V_VP9' : 'V_MPEG4/ISO/AVC'
+                },
+                audio: {
+                    codec: 'A_OPUS',
+                    bit_depth: 0 // 32 for pcm */
+                }
+            }
+        },
+        ffmpeg: {
+            video: {
+                codec: protocol === 'dash' ? 'libvpx-vp9' : 'libx264'
+            },
+            audio: {
+                codec: protocol === 'dash' ? 'libopus' : 'aac'
+            }
+        }
+    };
+}
 
-export class HLS extends EventTarget {
-    constructor(stream, audio_context, base_url, ffmpeg_lib_url, frame_rate, rotate) {
+export class Streamer extends EventTarget {
+    constructor(stream, audio_context, base_url, config, rotate) {
         super();
         this.stream = stream;
         this.audio_context = audio_context;
         this.base_url = base_url;
-        this.ffmpeg_lib_url = ffmpeg_lib_url;
-        this.frame_rate = frame_rate;
+        this.config = config;
         if (rotate) {
             this.ffmpeg_metadata = ['-metadata:s:v:0', 'rotate=-90'];
         } else {
@@ -30,25 +81,47 @@ export class HLS extends EventTarget {
             return;
         }
 
-        try {
-            // first try WebM/H264 MediaRecorder - this should work on Chrome Linux and Windows
-            await this.media_recorder('video/webm;codecs=H264');
-            console.log("Using MediaRecorder WebM/h264");
-        } catch (ex) {
-            console.warn(ex.toString());
-            try {
-                // next try WebCodecs - this should work on Chrome including Android
-                await this.webcodecs(video_encoder_codec,
-                                     'opus' /*'pcm'*/,
-                                     { avc: { format: 'annexb' } });
-                console.log("Using WebCodecs");
-            } catch (ex) {
-                console.warn(ex.toString());
-                // finally try MP4 - this should work on Safari MacOS and iOS, producing H264
-                // this assumes ffmpeg-hls.js has been configured with MP4 support
+        const mrcfg = this.config.media_recorder;
+
+        const mp4 = async () => {
+            if (mfcrg.mp4) {
+                // try MediaRecorder MP4 - this should work on Safari MacOS and iOS,
+                // producing H.264 video and AAC audio
                 await this.media_recorder('video/mp4');
-                console.log("Using MediaRecorder MP4");
+                console.log("Using MediaRecorder MP4 (H264,aac)");
+            } else {
+                throw new Error('no supported encoding methods');
             }
+        };
+
+        const webcodecs = async () => {
+            const wccfg = this.config.webcodecs;
+            if (wccfg) {
+                try {
+                    // try WebCodecs - this should work on Chrome including Android
+                    await this.webcodecs();
+                    console.log("Using WebCodecs");
+                } catch (ex) {
+                    console.warn(ex);
+                    await mp4();
+                }
+            } else {
+                await mp4();
+            }
+        };
+
+        if (mrcfg.webm) {
+            try {
+                // try MediaRecorder WebM - this should work on Chrome Linux and Windows
+                const codecs = `${mrcfg.video.codec},${mrcfg.audio.codec}`;
+                await this.media_recorder(`video/webm;codecs=${codecs}`);
+                console.log(`Using MediaRecorder WebM (${codecs})`);
+            } catch (ex) {
+                console.warn(ex);
+                await webcodecs();
+            }
+        } else {
+            await webcodecs();
         }
 
         this.started = true;
@@ -59,7 +132,7 @@ export class HLS extends EventTarget {
         await this.audio_context.audioWorklet.addModule('./dummy-worklet.js');
         this.dummy_processor = new AudioWorkletNode(this.audio_context, 'dummy-processor', {
             processorOptions: {
-                update_rate: this.frame_rate
+                update_rate: this.config.video.framerate
             }
         });
         this.dummy_processor.onerror = onerror;
@@ -73,6 +146,31 @@ export class HLS extends EventTarget {
         this.dummy_processor.disconnect();
     }
 
+    receiver_args(video_codec, audio_codec) {
+        return {
+            ffmpeg_lib_url: this.config.ffmpeg_lib_url,
+            ffmpeg_args: [
+                //'-loglevel', 'debug',
+                '-i', '/work/stream1',
+                '-map', '0:v',
+                '-map', '0:a',
+                '-c:v', video_codec === this.config.ffmpeg.video.codec ||
+                        video_codec === 'copy' ?
+                        'copy' : // pass through the video data (no decoding or encoding)
+                        this.config.ffmpeg.video.codec, // re-encode video
+                '-b:v', this.config.video.bitrate.toString(), // set video bitrate
+                ...this.ffmpeg_metadata,
+                '-c:a', audio_codec === this.config.ffmpeg.audio.codec ||
+                        audio_codec === 'copy' ?
+                        'copy' : // pass through the audio data
+                        this.config.ffmpeg.audio.codec, // re-encode audio
+                '-b:a', this.config.audio.bitrate.toString() // set audio bitrate
+            ],
+            base_url: this.base_url,
+            protocol: this.config.protocol
+        };
+    }
+
     async media_recorder(mimeType) {
         const onerror = this.onerror.bind(this);
 
@@ -80,8 +178,8 @@ export class HLS extends EventTarget {
         // note we don't start recording until ffmpeg has started (below)
         const recorder = new MediaRecorder(this.stream, {
             mimeType,
-            audioBitsPerSecond,
-            videoBitsPerSecond
+            videoBitsPerSecond: this.config.video.bitrate,
+            audioBitsPerSecond: this.config.audio.bitrate
         });
         recorder.onerror = onerror;
 
@@ -101,27 +199,71 @@ export class HLS extends EventTarget {
 
         await this.start_dummy_processor();
 
+        let video_codec, audio_codec;
+        if (recorder.mimeType === 'video/mp4') {
+            video_codec = 'libx264';
+            audio_codec = 'aac';
+        } else {
+            switch (this.config.media_recorder.video.codec.toLowerCase()) {
+                case 'av1':
+                    video_codec = 'libaom-av1';
+                    break;
+
+                case 'h264':
+                    video_codec = 'libx264';
+                    break;
+
+                case 'vp8':
+                    video_codec = 'libvpx';
+                    break;
+
+                case 'vp9':
+                    video_codec = 'libvpx-vp9';
+                    break;
+
+                default:
+                    video_codec = null;
+                    break;
+            }
+
+            switch (this.config.media_recorder.audio.codec.toLowerCase()) {
+                case 'flac':
+                    audio_codec = 'flac';
+                    break;
+
+                case 'mp3':
+                    audio_codec = 'libmp3lame';
+                    break;
+
+                case 'opus':
+                    audio_codec = 'libopus';
+                    break;
+
+                case 'vorbis':
+                    audio_codec = 'libvorbis';
+                    break;
+
+                case 'pcm':
+                    audio_codec = 'f32le';
+                    break;
+
+                default:
+                    if (audio_codes.startsWith('mp4a')) {
+                        audio_codec = 'aac';
+                    } else {
+                        audio_codec = null;
+                    }
+                    break;
+            }
+        }
+
         // start the ffmpeg worker
         this.receiver = new MuxReceiver();
         this.receiver.addEventListener('message', e => {
             const msg = e.detail;
             switch (msg.type) {
                 case 'ready':
-                    this.receiver.start({
-                        ffmpeg_lib_url: this.ffmpeg_lib_url,
-                        ffmpeg_args: [
-                            '-i', '/work/stream1',
-                            '-map', '0:v',
-                            '-map', '0:a',
-                            '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                            ...this.ffmpeg_metadata,
-                            ...(recorder.mimeType === 'video/mp4' ?
-                                ['-c:a', 'copy'] : // assume already AAC
-                                ['-c:a', 'aac',  // re-encode audio as AAC-LC
-                                 '-b:a', audioBitsPerSecond.toString()]) // set audio bitrate
-                        ],
-                        base_url: this.base_url
-                    });
+                    this.receiver.start(this.receiver_args(video_codec, audio_codec));
                     break;
 
                 case 'error':
@@ -153,7 +295,7 @@ export class HLS extends EventTarget {
         });
     }
 
-    async webcodecs(video_codec, audio_codec, video_config, audio_config) {
+    async webcodecs() {
         const onerror = this.onerror.bind(this);
 
         const video_track = this.stream.getVideoTracks()[0];
@@ -209,13 +351,11 @@ export class HLS extends EventTarget {
                         readable: video_readable,
                         key_frame_interval,
                         config: {
-                            codec: video_codec,
-                            bitrate: videoBitsPerSecond,
-                            framerate: this.frame_rate,
+                            ...this.config.video,
+                            ...this.config.webcodecs.video,
                             latencyMode: 'realtime',
                             width: video_settings.width,
                             height: video_settings.height,
-                            ...video_config
                         },
                     }, [video_readable]);
                     
@@ -224,11 +364,10 @@ export class HLS extends EventTarget {
                         audio: true,
                         readable: audio_readable,
                         config: {
-                            codec: audio_codec,
-                            bitrate: audioBitsPerSecond,
+                            ...this.config.audio,
+                            ...this.config.webcodecs.audio,
                             sampleRate: audio_settings.sampleRate,
                             numberOfChannels: audio_settings.channelCount,
-                            ...audio_config
                         },
                     }, [audio_readable]);
 
@@ -257,6 +396,60 @@ export class HLS extends EventTarget {
             }
         };
 
+        let video_codec;
+        switch (this.config.webcodecs.video.codec) {
+            case 'V_AV1':
+                video_codec = 'libaom-av1';
+                break;
+
+            case 'V_MPEG4/ISO/AVC':
+                video_codec = 'libx264';
+                break;
+
+            case 'V_VP8':
+                video_codec = 'libvpx';
+                break;
+
+            case 'V_VP9':
+                video_codec = 'libvpx-vp9';
+                break;
+
+            default:
+                video_codec = null;
+                break;
+        }
+
+        let audio_codec;
+        switch (this.config.webcodecs.audio.codec) {
+            case 'A_FLAC':
+                audio_codec = 'flac';
+                break;
+
+            case 'A_MPEG/L3':
+                audio_codec = 'libmp3lame';
+                break;
+
+            case 'A_OPUS':
+                audio_codec = 'libopus';
+                break;
+
+            case 'A_VORBIS':
+                audio_codec = 'libvorbis';
+                break;
+
+            case 'A_PCM/FLOAT/IEEE':
+                audio_codec = 'f32le';
+                break;
+
+            default:
+                if (audio_codes.startsWith('A_AAC')) {
+                    audio_codec = 'aac';
+                } else {
+                    audio_codec = null;
+                }
+                break;
+        }
+
         this.worker.postMessage({
             type: 'start',
             webm_metadata: {
@@ -264,28 +457,19 @@ export class HLS extends EventTarget {
                 video: {
                     width: video_settings.width,
                     height: video_settings.height,
-                    frame_rate: this.frame_rate,
-                    codec_id: 'V_MPEG4/ISO/AVC'
+                    frame_rate: this.config.video.framerate,
+                    codec_id: this.config.webcodecs.webm_muxer.video.codec
                 },
                 audio: {
                     sample_rate: audio_settings.sampleRate,
                     channels: audio_settings.channelCount,
-                    codec_id: 'A_OPUS'
+                    bit_depth: this.config.webcodecs.webm_muxer.audio.bit_depth,
+                    codec_id: this.config.webcodecs.webm_muxer.audio.codec
                 }
             },
             webm_receiver: './mux-receiver.js',
             webm_receiver_data: { name: 'stream1' },
-            ffmpeg_lib_url: this.ffmpeg_lib_url,
-            base_url: this.base_url,
-            ffmpeg_args: [
-                '-i', '/work/stream1',
-                '-map', '0:v',
-                '-map', '0:a',
-                '-c:v', 'copy', // pass through the video data (h264, no decoding or encoding)
-                ...this.ffmpeg_metadata,
-                '-c:a', 'aac',  // re-encode audio as AAC-LC
-                '-b:a', audioBitsPerSecond.toString() // set audio bitrate
-            ]
+            ...this.receiver_args(video_codec, audio_codec)
         });
     }
 
