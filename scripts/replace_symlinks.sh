@@ -12,7 +12,9 @@ do
 done
 
 for f in ffmpeg-worker-hls.js \
-         ffmpeg-worker-hls.wasm
+         ffmpeg-worker-hls.wasm \
+         ffmpeg-worker-dash.js \
+         ffmpeg-worker-dash.wasm
 do
     rm "$f"
     cp "../ffmpeg.js/$f" .
