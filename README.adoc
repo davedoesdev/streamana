@@ -36,6 +36,8 @@ You can also change various options:
 ** Lock the camera to portrait mode (where available, e.g. mobile phones).
 ** Zoom the camera to fill the page.
 ** Switch between HLS and DASH encoding.
+** Switch between POST and PUT requests.
+** Switch between CORS modes.
 ** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
    the HLS or DASH encoding.
 
