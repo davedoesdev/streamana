@@ -140,8 +140,10 @@ Use the `Streamer` class as follows:
 ** The configuration returned by calling `get_default_config_from_url` (see above),
    optionally modified by your application.
 ** Whether the video is rotated.
-* Call the `async start()` function to start streaming.
-* Call the `end()` function to stop streaming.
+** Extra request options for https://developer.mozilla.org/en-US/docs/Web/API/fetch[`fetch`].
+   You can use this to override the default request method (`POST`) or CORS mode (`no-cors`).
+* Call the `async start()` method to start streaming.
+* Call the `end()` method to stop streaming.
 
 `Streamer` extends from https://developer.mozilla.org/en-US/docs/Web/API/EventTarget[`EventTarget`]
 and dispatches the following events:

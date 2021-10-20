@@ -49,26 +49,25 @@
       </div>
     </nav>
     <div class="collapse p-3 bg-light text-dark card border-dark flex-grow-0" id="navbarToggleExternalContent">
-        <div class="pb-4">
-          <label for="resolution" class="form-label">Video resolution</label>
-          <select id="resolution" class="form-select">
-          </select>
-        </div>
-        <div class="form-check">
-          <input id="greyscale" class="form-check-input" type="checkbox">
-          <label for="greyscale" class="form-check-label">Greyscale</label>
-        </div>
-        <div class="form-check">
-          <input id="lock-portrait" class="form-check-input" type="checkbox">
-          <label for="lock-portrait" class="form-check-label">Lock and rotate portrait mode</label>
-        </div>
-        <div class="form-check">
-          <input id="zoom-video" class="form-check-input" type="checkbox">
-          <label for="zoom-video" class="form-check-label">Minimize vertical bars in local video display</label>
-        </div>
-        <div class="pt-4">
-          <label class="form-label">Ingestion protocol</label>
-          <div>
+      <div class="pb-4">
+        <label for="resolution" class="form-label">Video resolution</label>
+        <select id="resolution" class="form-select"></select>
+      </div>
+      <div class="form-check">
+        <input id="greyscale" class="form-check-input" type="checkbox">
+        <label for="greyscale" class="form-check-label">Greyscale</label>
+      </div>
+      <div class="form-check">
+        <input id="lock-portrait" class="form-check-input" type="checkbox">
+        <label for="lock-portrait" class="form-check-label">Lock and rotate portrait mode</label>
+      </div>
+      <div class="form-check">
+        <input id="zoom-video" class="form-check-input" type="checkbox">
+        <label for="zoom-video" class="form-check-label">Minimize vertical bars in local video display</label>
+      </div>
+      <div class="pt-4">
+        <label class="form-label">Ingestion protocol</label>
+        <div>
           <div class="form-check form-check-inline">
             <input id="protocol-hls" name="protocol" class="form-check-input" type="radio" value="ffmpeg-worker-hls.js">
             <label for="protocol-hls" class="form-check-label">HLS (H.264)</label>
@@ -77,15 +76,45 @@
             <input id="protocol-dash" name="protocol" class="form-check-input" type="radio" value="ffmpeg-worker-dash.js">
             <label for="protocol-dash" class="form-check-label">DASH (VP9)</label>
           </div>
+        </div>
+      </div>
+      <div class="pt-4">
+        <label class="form-label">Request method</label>
+        <div>
+          <div class="form-check form-check-inline">
+            <input id="request-post" name="request-method" class="form-check-input" type="radio" value="POST">
+            <label for="request-post" class="form-check-label">POST</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input id="request-put" name="request-method" class="form-check-input" type="radio" value="PUT">
+            <label for="request-put" class="form-check-label">PUT</label>
           </div>
         </div>
-        <div class="pt-4">
-          <label for="ffmpeg-lib-url" class="form-label">FFmpeg library URL</label>
-          <input id="ffmpeg-lib-url" class="form-control" type="text">
+      </div>
+      <div class="pt-4">
+        <label class="form-label">Cross-Origin Resource Sharing (CORS)</label>
+        <div>
+          <div class="form-check form-check-inline">
+            <input id="request-cors" name="request-mode" class="form-check-input" type="radio" value="cors">
+            <label for="request-cors" class="form-check-label">Allow (cors)</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input id="request-no-cors" name="request-mode" class="form-check-input" type="radio" value="no-cors">
+            <label for="request-no-cors" class="form-check-label">Restrict (no-cors)</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input id="request-same-origin" name="request-mode" class="form-check-input" type="radio" value="same-origin">
+            <label for="request-same-origin" class="form-check-label">Deny (same-origin)</label>
+          </div>
         </div>
+      </div>
+      <div class="pt-4">
+        <label for="ffmpeg-lib-url" class="form-label">FFmpeg library URL</label>
+        <input id="ffmpeg-lib-url" class="form-control" type="text">
+      </div>
     </div>
     <div id="error-alert" class="alert alert-danger alert-dismissible fade mb-0 flex-grow-0" role="alert">
-      <strong>An error occurred!</strong> See the Developer Console for details.
+      <strong><div id="error-msg"></div></strong> See the Developer Console for details
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     <div class="position-relative overflow-hidden flex-grow-1 mx-auto d-flex align-items-center">

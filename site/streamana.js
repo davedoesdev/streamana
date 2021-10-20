@@ -24,6 +24,7 @@ const canvas_el_parent = canvas_el.parentNode;
 const canvas_proto = canvas_el.cloneNode();
 const waiting_el = document.getElementById('waiting');
 const error_alert_el = document.getElementById('error-alert');
+const error_msg_el = document.getElementById('error-msg');
 const error_alert_el_parent = error_alert_el.parentNode;
 const error_alert_el_nextSibling = error_alert_el.nextSibling;
 error_alert_el_parent.removeChild(error_alert_el);
@@ -104,7 +105,43 @@ const camera_swap_el = document.getElementById('camera-swap');
 const ingestion_url_el = document.getElementById('ingestion-url');
 const protocol_hls_el = document.getElementById('protocol-hls');
 const protocol_dash_el = document.getElementById('protocol-dash');
+const request_post = document.getElementById('request-post');
+const request_put = document.getElementById('request-put');
+const request_cors = document.getElementById('request-cors');
+const request_no_cors = document.getElementById('request-no-cors');
+const request_same_origin = document.getElementById('request-same-origin');
 const resolution_el = document.getElementById('resolution');
+
+if (localStorage.getItem('streamana-request-method') === 'PUT') {
+    request_put.checked = true;
+    request_no_cors.disabled = true;
+} else {
+    request_post.checked = true;
+}
+
+switch (localStorage.getItem('streamana-request-mode')) {
+    case 'cors':
+        request_cors.checked = true;
+        break;
+    case 'same-origin':
+        request_same_origin.checked = true;
+        break;
+    default:
+        request_no_cors.checked = true;
+        request_put.disabled = true;
+        break;
+}
+
+function request_save() {
+    localStorage.setItem(`streamana-${this.name}`, this.value);
+    request_put.disabled = request_no_cors.checked;
+    request_no_cors.disabled = request_put.checked;
+}
+request_put.addEventListener('change', request_save);
+request_post.addEventListener('change', request_save);
+request_cors.addEventListener('change', request_save);
+request_no_cors.addEventListener('change', request_save);
+request_same_origin.addEventListener('change', request_save);
 
 let streamer_config;
 let video_config;
@@ -220,13 +257,15 @@ document.documentElement.classList.remove('busy');
 
 let streamer;
 
-// ingestion url doesn't change when protocol changes due to ffmpeg_lib_url
-// why does clicking on menu close the menu after change ffmpeg_lib_url?
-
 async function start() {
     const ingestion_url = ingestion_url_el.value.trim();
     if (!ingestion_url) {
         console.error('No ingestion URL');
+
+        error_msg_el.innerText = "Please enter an ingestion URL";
+        error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
+        error_alert_el.classList.add('show');
+
         go_live_el.checked = false;
         return;
     }
@@ -244,6 +283,11 @@ async function start() {
     const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
                            ffmpeg_lib_url_el.placeholder.trim();
 
+    const method = request_put.checked ? request_put.value : request_post.value;
+    const mode = request_cors.checked ? request_cors.value :
+                 request_same_origin.checked ? request_same_origin.value :
+                 request_no_cors.value;
+
     go_live_el.disabled = true;
     ingestion_url_el.disabled = true;
     ingestion_url_el.parentNode.classList.add('d-none');
@@ -253,6 +297,11 @@ async function start() {
     resolution_el.disabled = true;
     protocol_hls_el.disabled = true;
     protocol_dash_el.disabled = true;
+    request_post.disabled = true;
+    request_put.disabled = true;
+    request_cors.disabled = true;
+    request_no_cors.disabled = true;
+    request_same_origin.disabled = true;
     waiting_el.classList.remove('d-none');
     mic_el.removeEventListener('click', mic_save);
     camera_el.removeEventListener('click', camera_save);
@@ -310,6 +359,7 @@ async function start() {
             }
         }
         if (err) {
+            error_msg_el.innerText = typeof err === 'string' ? err : err.message;
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
             error_alert_el.classList.add('show');
         }
@@ -363,6 +413,11 @@ async function start() {
         resolution_el.disabled = false;
         protocol_hls_el.disabled = ffmpeg_lib_url_el.value.trim();
         protocol_dash_el.disabled = ffmpeg_lib_url_el.value.trim();;
+        request_post.disabled = false;
+        request_put.disabled = request_no_cors.checked;
+        request_cors.disabled = false;
+        request_no_cors.disabled = request_put.checked;
+        request_same_origin.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -682,7 +737,8 @@ async function start() {
                                 audio_context,
                                 ingestion_url,
                                 streamer_config,
-                                lock_portrait);
+                                lock_portrait,
+                                { method, mode });
         streamer.addEventListener('run', () => console.log('Streamer running'));
         streamer.addEventListener('exit', ev => {
             const msg = `Streamer exited with status ${ev.detail.code}`;

@@ -60,7 +60,7 @@ export function get_default_config_from_url(ffmpeg_lib_url) {
 }
 
 export class Streamer extends EventTarget {
-    constructor(stream, audio_context, base_url, config, rotate) {
+    constructor(stream, audio_context, base_url, config, rotate, request_options) {
         super();
         this.stream = stream;
         this.audio_context = audio_context;
@@ -71,6 +71,7 @@ export class Streamer extends EventTarget {
         } else {
             this.ffmpeg_metadata = [];
         }
+        this.request_options = request_options;
         this.update_event = new CustomEvent('update');
         this.sending = false;
         this.started = false;
@@ -167,7 +168,9 @@ export class Streamer extends EventTarget {
                 '-b:a', this.config.audio.bitrate.toString() // set audio bitrate
             ],
             base_url: this.base_url,
-            protocol: this.config.protocol
+            protocol: this.config.protocol,
+            protocol_args: [],
+            request_options: this.request_options
         };
     }
 
