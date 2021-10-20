@@ -8,7 +8,14 @@ export class MuxReceiver extends EventTarget {
         }, 0);
     }
 
-    start({ ffmpeg_lib_url, ffmpeg_args, base_url, protocol }) {
+    start({
+        ffmpeg_lib_url,
+        ffmpeg_args,
+        base_url,
+        protocol,
+        protocol_args,
+        request_options
+    }) {
         this.worker = new Worker(ffmpeg_lib_url);
         this.worker.onerror = this.onerror.bind(this);
         this.worker.onmessage = e => {
@@ -23,9 +30,10 @@ export class MuxReceiver extends EventTarget {
                             ...(protocol === 'dash' ? [
                                 '-f', 'dash', // use dash encoder
                                 '-seg_duration', '2', // 2 second segments
-                                '-window_size', '2', // two chunks in the list at a time
+                                '-update_period', '2', // manifest update period
                                 '-streaming', '1', // fragment data
                                 '-dash_segment_type', 'webm', // container type
+                                ...protocol_args,
                                 '/outbound/output.mpd'
                             ] : [
                                 '-f', 'hls', // use hls encoder
@@ -33,6 +41,7 @@ export class MuxReceiver extends EventTarget {
                                 '-hls_segment_type', 'mpegts', // MPEG2-TS muxer
                                 '-hls_list_size', '2', // two chunks in the list at a time
                                 '-hls_flags', 'split_by_time', // if you don't have < 2s keyframes
+                                ...protocol_args,
                                 '/outbound/output.m3u8' // path to media playlist file in virtual FS,
                                                         // must be under /outbound
                             ])
@@ -58,9 +67,7 @@ export class MuxReceiver extends EventTarget {
                         type: 'base-url',
                         data: base_url,
                         protocol,
-                        options: protocol === 'dash' ? {
-                            //method: 'PUT'
-                        } : {}
+                        options: request_options
                     });
                     // falls through
                 case 'sending':
