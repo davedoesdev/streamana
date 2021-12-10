@@ -18,7 +18,7 @@ export class MuxReceiver extends EventTarget {
     }) {
         this.worker = new Worker(ffmpeg_lib_url);
         this.worker.onerror = this.onerror.bind(this);
-        this.worker.onmessage = e => {
+        this.worker.onmessage = async e => {
             const msg = e.data;
             switch (msg.type) {
                 case 'ready':
@@ -81,6 +81,18 @@ export class MuxReceiver extends EventTarget {
                         code: msg.code
                     }}));
                     break;
+                case 'upload': {
+                    const reader = msg.stream.getReader();
+                    const chunks = [];
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) {
+                            break;
+                        }
+                        chunks.push(value);
+                    }
+                    console.log('upload', msg.url, new Blob(chunks));
+                }
             }
         };
     }
