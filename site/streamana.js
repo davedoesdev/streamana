@@ -359,7 +359,7 @@ async function start() {
             }
         }
         if (err) {
-            error_msg_el.innerText = typeof err === 'string' ? err : err.message;
+            error_msg_el.innerText = typeof err === 'string' ? err : err.message || err.detail;
             error_alert_el_parent.insertBefore(error_alert_el, error_alert_el_nextSibling);
             error_alert_el.classList.add('show');
         }
