@@ -85,7 +85,7 @@ export class Streamer extends EventTarget {
         const mrcfg = this.config.media_recorder;
 
         const mp4 = async () => {
-            if (mfcrg.mp4) {
+            if (mrcfg.mp4) {
                 // try MediaRecorder MP4 - this should work on Safari MacOS and iOS,
                 // producing H.264 video and AAC audio
                 await this.media_recorder('video/mp4');
