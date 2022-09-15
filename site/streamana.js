@@ -105,43 +105,57 @@ const camera_swap_el = document.getElementById('camera-swap');
 const ingestion_url_el = document.getElementById('ingestion-url');
 const protocol_hls_el = document.getElementById('protocol-hls');
 const protocol_dash_el = document.getElementById('protocol-dash');
-const request_post = document.getElementById('request-post');
-const request_put = document.getElementById('request-put');
-const request_cors = document.getElementById('request-cors');
-const request_no_cors = document.getElementById('request-no-cors');
-const request_same_origin = document.getElementById('request-same-origin');
+const request_post_el = document.getElementById('request-post');
+const request_put_el = document.getElementById('request-put');
+const request_cors_el = document.getElementById('request-cors');
+const request_no_cors_el = document.getElementById('request-no-cors');
+const request_same_origin_el = document.getElementById('request-same-origin');
 const resolution_el = document.getElementById('resolution');
+const prefer_mediarecorder_el = document.getElementById('prefer-mediarecorder');
+const prefer_webcodecs_el = document.getElementById('prefer-webcodecs');
 
 if (localStorage.getItem('streamana-request-method') === 'PUT') {
-    request_put.checked = true;
-    request_no_cors.disabled = true;
+    request_put_el.checked = true;
+    request_no_cors_el.disabled = true;
 } else {
-    request_post.checked = true;
+    request_post_el.checked = true;
 }
 
 switch (localStorage.getItem('streamana-request-mode')) {
     case 'cors':
-        request_cors.checked = true;
+        request_cors_el.checked = true;
         break;
     case 'same-origin':
-        request_same_origin.checked = true;
+        request_same_origin_el.checked = true;
         break;
     default:
-        request_no_cors.checked = true;
-        request_put.disabled = true;
+        request_no_cors_el.checked = true;
+        request_put_el.disabled = true;
         break;
 }
 
 function request_save() {
     localStorage.setItem(`streamana-${this.name}`, this.value);
-    request_put.disabled = request_no_cors.checked;
-    request_no_cors.disabled = request_put.checked;
+    request_put_el.disabled = request_no_cors_el.checked;
+    request_no_cors_el.disabled = request_put_el.checked;
 }
-request_put.addEventListener('change', request_save);
-request_post.addEventListener('change', request_save);
-request_cors.addEventListener('change', request_save);
-request_no_cors.addEventListener('change', request_save);
-request_same_origin.addEventListener('change', request_save);
+request_put_el.addEventListener('change', request_save);
+request_post_el.addEventListener('change', request_save);
+request_cors_el.addEventListener('change', request_save);
+request_no_cors_el.addEventListener('change', request_save);
+request_same_origin_el.addEventListener('change', request_save);
+
+function encoder_preference_save() {
+    localStorage.setItem('streamana-encoder-preference', this.value);
+}
+prefer_mediarecorder_el.addEventListener('change', encoder_preference_save);
+prefer_webcodecs_el.addEventListener('change', encoder_preference_save);
+
+if (localStorage.getItem('streamana-encoder-preference') === 'webcodecs') {
+    prefer_webcodecs_el.checked = true;
+} else {
+    prefer_mediarecorder_el.checked = true;
+}
 
 let streamer_config;
 let video_config;
@@ -243,8 +257,6 @@ async function set_ingestion() {
             resolution_el.appendChild(option);
             video_configs.set(option.innerText, config);
         }
-
-        return streamer_config;
     } finally {
         busy_el.classList.add('d-none');
     }
@@ -283,10 +295,10 @@ async function start() {
     const ffmpeg_lib_url = ffmpeg_lib_url_el.value.trim() ||
                            ffmpeg_lib_url_el.placeholder.trim();
 
-    const method = request_put.checked ? request_put.value : request_post.value;
-    const mode = request_cors.checked ? request_cors.value :
-                 request_same_origin.checked ? request_same_origin.value :
-                 request_no_cors.value;
+    const method = request_put_el.checked ? request_put_el.value : request_post_el.value;
+    const mode = request_cors_el.checked ? request_cors_el.value :
+                 request_same_origin_el.checked ? request_same_origin_el.value :
+                 request_no_cors_el.value;
 
     go_live_el.disabled = true;
     ingestion_url_el.disabled = true;
@@ -297,11 +309,13 @@ async function start() {
     resolution_el.disabled = true;
     protocol_hls_el.disabled = true;
     protocol_dash_el.disabled = true;
-    request_post.disabled = true;
-    request_put.disabled = true;
-    request_cors.disabled = true;
-    request_no_cors.disabled = true;
-    request_same_origin.disabled = true;
+    request_post_el.disabled = true;
+    request_put_el.disabled = true;
+    request_cors_el.disabled = true;
+    request_no_cors_el.disabled = true;
+    request_same_origin_el.disabled = true;
+    prefer_mediarecorder_el.disabled = true;
+    prefer_webcodecs_el.disabled = true;
     waiting_el.classList.remove('d-none');
     mic_el.removeEventListener('click', mic_save);
     camera_el.removeEventListener('click', camera_save);
@@ -413,11 +427,13 @@ async function start() {
         resolution_el.disabled = false;
         protocol_hls_el.disabled = ffmpeg_lib_url_el.value.trim();
         protocol_dash_el.disabled = ffmpeg_lib_url_el.value.trim();;
-        request_post.disabled = false;
-        request_put.disabled = request_no_cors.checked;
-        request_cors.disabled = false;
-        request_no_cors.disabled = request_put.checked;
-        request_same_origin.disabled = false;
+        request_post_el.disabled = false;
+        request_put_el.disabled = request_no_cors_el.checked;
+        request_cors_el.disabled = false;
+        request_no_cors_el.disabled = request_put_el.checked;
+        request_same_origin_el.disabled = false;
+        prefer_mediarecorder_el.disabled = false;
+        prefer_webcodecs_el.disabled = false;
         waiting_el.classList.add('d-none');
         canvas_el.classList.add('d-none');
     }
@@ -726,7 +742,7 @@ async function start() {
         // Note: WebAudio destination stream output is bugged on Safari:
         // https://bugs.webkit.org/show_bug.cgi?id=173863
         // https://bugs.webkit.org/show_bug.cgi?id=198284
-        //const silence = audio_dest.context.createBufferSource();
+        //silence = audio_dest.context.createBufferSource();
         silence = audio_dest.context.createConstantSource();
         silence.start();
         audio_source = silence;
@@ -738,7 +754,8 @@ async function start() {
                                 ingestion_url,
                                 streamer_config,
                                 lock_portrait,
-                                { method, mode });
+                                { method, mode },
+                                prefer_webcodecs_el.checked);
         streamer.addEventListener('run', () => console.log('Streamer running'));
         streamer.addEventListener('exit', ev => {
             const msg = `Streamer exited with status ${ev.detail.code}`;
