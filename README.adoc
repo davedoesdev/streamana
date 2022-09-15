@@ -38,6 +38,8 @@ You can also change various options:
 ** Switch between HLS and DASH encoding.
 ** Switch between POST and PUT requests.
 ** Switch between CORS modes.
+** Switch between https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder[MediaRecorder]
+   and https://www.w3.org/TR/webcodecs/[WebCodecs].
 ** Select a different version of https://github.com/davedoesdev/ffmpeg.js[ffmpeg.js] to perform
    the HLS or DASH encoding.
 
@@ -144,6 +146,7 @@ Use the `Streamer` class as follows:
 ** Whether the video is rotated.
 ** Extra request options for https://developer.mozilla.org/en-US/docs/Web/API/fetch[`fetch`].
    You can use this to override the default request method (`POST`) or CORS mode (`no-cors`).
+** Whether to encode audio and video using WebCodecs (`true`) or MediaRecorder (`false`).
 * Call the `async start()` method to start streaming.
 * Call the `end()` method to stop streaming.
 

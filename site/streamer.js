@@ -60,7 +60,7 @@ export function get_default_config_from_url(ffmpeg_lib_url) {
 }
 
 export class Streamer extends EventTarget {
-    constructor(stream, audio_context, base_url, config, rotate, request_options) {
+    constructor(stream, audio_context, base_url, config, rotate, request_options, prefer_webcodecs) {
         super();
         this.stream = stream;
         this.audio_context = audio_context;
@@ -75,6 +75,7 @@ export class Streamer extends EventTarget {
         this.update_event = new CustomEvent('update');
         this.sending = false;
         this.started = false;
+        this.prefer_webcodecs = prefer_webcodecs;
     }
 
     async start() {
@@ -111,7 +112,7 @@ export class Streamer extends EventTarget {
             }
         };
 
-        if (mrcfg.webm) {
+        if (mrcfg.webm && !this.prefer_webcodecs) {
             try {
                 // try MediaRecorder WebM - this should work on Chrome Linux and Windows
                 const codecs = `${mrcfg.video.codec},${mrcfg.audio.codec}`;
@@ -251,7 +252,7 @@ export class Streamer extends EventTarget {
                     break;
 
                 default:
-                    if (audio_codes.startsWith('mp4a')) {
+                    if (this.config.media_recorder.audio.codec.toLowerCase().startsWith('mp4a')) {
                         audio_codec = 'aac';
                     } else {
                         audio_codec = null;
@@ -400,7 +401,7 @@ export class Streamer extends EventTarget {
         };
 
         let video_codec;
-        switch (this.config.webcodecs.video.codec) {
+        switch (this.config.webcodecs.webm_muxer.video.codec) {
             case 'V_AV1':
                 video_codec = 'libaom-av1';
                 break;
@@ -423,7 +424,7 @@ export class Streamer extends EventTarget {
         }
 
         let audio_codec;
-        switch (this.config.webcodecs.audio.codec) {
+        switch (this.config.webcodecs.webm_muxer.audio.codec) {
             case 'A_FLAC':
                 audio_codec = 'flac';
                 break;
@@ -445,7 +446,7 @@ export class Streamer extends EventTarget {
                 break;
 
             default:
-                if (audio_codes.startsWith('A_AAC')) {
+                if (this.config.webcodecs.webm_muxer.audio.codec.startsWith('A_AAC')) {
                     audio_codec = 'aac';
                 } else {
                     audio_codec = null;

@@ -109,6 +109,19 @@
         </div>
       </div>
       <div class="pt-4">
+        <label class="form-label">Encoder Preference</label>
+        <div>
+          <div class="form-check form-check-inline">
+            <input id="prefer-mediarecorder" name="preferred-encoder" class="form-check-input" type="radio" value="mediarecorder">
+            <label for="prefer-mediarecorder" class="form-check-label">MediaRecorder</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input id="prefer-webcodecs" name="preferred-encoder" class="form-check-input" type="radio" value="webcodecs">
+            <label for="prefer-webcodecs" class="form-check-label">WebCodecs</label>
+          </div>
+        </div>
+      </div>
+      <div class="pt-4">
         <label for="ffmpeg-lib-url" class="form-label">FFmpeg library URL</label>
         <input id="ffmpeg-lib-url" class="form-control" type="text">
       </div>
