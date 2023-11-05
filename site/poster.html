@@ -1,0 +1,32 @@
+<html>
+  <head>
+    <script>
+    window.addEventListener('message', async e => {
+      const msg = e.data;
+      const reader = msg.options.stream.getReader();
+      const chunks = [];
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        chunks.push(value);
+      }
+      delete msg.options.stream;
+      msg.options.body = new Blob(chunks);
+      fetch(msg.url, msg.options).then(response => {
+        //check_exit();
+        // note: with no-cors, response is opaque and ok will always be false
+        if (!response.ok && (msg.options.mode !== 'no-cors')) {
+          console.error("RESPONSE NOT OK", msg.url, response);
+        }
+      }).catch (err => {
+        //check_exit();
+        console.error("REQUEST ERROR", msg.url, err);
+      });
+    });
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

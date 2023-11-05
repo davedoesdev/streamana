@@ -10,6 +10,7 @@
     <script type="module" src="./streamana.js"></script>
   </head>
   <body class="d-flex flex-column vh-100 d-none">
+    <iframe credentialless id="poster" src="poster.html" width=0 height=0></iframe>
     <div id="busy" class="busy"></div>
     <nav id="nav" class="navbar navbar-light bg-light flex-grow-0">
       <div class="container-fluid">
@@ -66,7 +67,7 @@
         <label for="zoom-video" class="form-check-label">Minimize vertical bars in local video display</label>
       </div>
       <div class="pt-4">
-        <label class="form-label">Ingestion protocol</label>
+        <div class="form-label">Ingestion protocol</div>
         <div>
           <div class="form-check form-check-inline">
             <input id="protocol-hls" name="protocol" class="form-check-input" type="radio" value="ffmpeg-worker-hls.js">
@@ -79,7 +80,7 @@
         </div>
       </div>
       <div class="pt-4">
-        <label class="form-label">Request method</label>
+        <div class="form-label">Request method</div>
         <div>
           <div class="form-check form-check-inline">
             <input id="request-post" name="request-method" class="form-check-input" type="radio" value="POST">
@@ -92,7 +93,7 @@
         </div>
       </div>
       <div class="pt-4">
-        <label class="form-label">Cross-Origin Resource Sharing (CORS)</label>
+        <div class="form-label">Cross-Origin Resource Sharing (CORS)</div>
         <div>
           <div class="form-check form-check-inline">
             <input id="request-cors" name="request-mode" class="form-check-input" type="radio" value="cors">
@@ -109,7 +110,7 @@
         </div>
       </div>
       <div class="pt-4">
-        <label class="form-label">Encoder Preference</label>
+        <div class="form-label">Encoder Preference</div>
         <div>
           <div class="form-check form-check-inline">
             <input id="prefer-mediarecorder" name="preferred-encoder" class="form-check-input" type="radio" value="mediarecorder">

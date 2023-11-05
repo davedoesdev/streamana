@@ -26,6 +26,7 @@ export class MuxReceiver extends EventTarget {
                         type: 'run',
                         arguments: [
                             '-seekable', '0',
+                            //'-loglevel', 'debug',
                             ...ffmpeg_args,
                             ...(protocol === 'dash' ? [
                                 '-f', 'dash', // use dash encoder
@@ -34,7 +35,7 @@ export class MuxReceiver extends EventTarget {
                                 '-streaming', '1', // fragment data
                                 '-dash_segment_type', 'webm', // container type
                                 ...protocol_args,
-                                '/outbound/output.mpd'
+                                `/outbound/output${Math.random()}.mpd`
                             ] : [
                                 '-f', 'hls', // use hls encoder
                                 '-hls_time', '2', // 2 second HLS chunks
@@ -42,8 +43,8 @@ export class MuxReceiver extends EventTarget {
                                 '-hls_list_size', '2', // two chunks in the list at a time
                                 '-hls_flags', 'split_by_time', // if you don't have < 2s keyframes
                                 ...protocol_args,
-                                '/outbound/output.m3u8' // path to media playlist file in virtual FS,
-                                                        // must be under /outbound
+                                `/outbound/output${Math.random()}.m3u8` // path to media playlist file in virtual FS,
+                                                                        // must be under /outbound
                             ])
                         ],
                         MEMFS: [
@@ -82,16 +83,8 @@ export class MuxReceiver extends EventTarget {
                     }}));
                     break;
                 case 'upload': {
-                    const reader = msg.stream.getReader();
-                    const chunks = [];
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done) {
-                            break;
-                        }
-                        chunks.push(value);
-                    }
-                    console.log('upload', msg.url, new Blob(chunks));
+                    this.dispatchEvent(new CustomEvent('message', { detail: msg }));
+                    break;
                 }
             }
         };
