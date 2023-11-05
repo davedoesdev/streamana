@@ -60,7 +60,7 @@ export function get_default_config_from_url(ffmpeg_lib_url) {
 }
 
 export class Streamer extends EventTarget {
-    constructor(stream, audio_context, base_url, config, rotate, request_options, prefer_webcodecs) {
+    constructor(stream, audio_context, base_url, config, rotate, request_options, prefer_webcodecs, poster) {
         super();
         this.stream = stream;
         this.audio_context = audio_context;
@@ -76,6 +76,7 @@ export class Streamer extends EventTarget {
         this.sending = false;
         this.started = false;
         this.prefer_webcodecs = prefer_webcodecs;
+        this.poster = poster;
     }
 
     async start() {
@@ -168,7 +169,7 @@ export class Streamer extends EventTarget {
                         this.config.ffmpeg.audio.codec, // re-encode audio
                 '-b:a', this.config.audio.bitrate.toString() // set audio bitrate
             ],
-            base_url: this.base_url,
+            base_url: 'postMessage:', //this.base_url,
             protocol: this.config.protocol,
             protocol_args: [],
             request_options: this.request_options
@@ -295,6 +296,11 @@ export class Streamer extends EventTarget {
                     }
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
+
+                case 'upload':
+                    msg.url = this.base_url + msg.url.split(':')[1];
+                    this.poster.postMessage(msg, '*', msg.transfer);
+                    break;
             }
         });
     }
@@ -397,6 +403,11 @@ export class Streamer extends EventTarget {
                     }
                     this.dispatchEvent(new CustomEvent(msg.type, { detail: { code: msg.code } }));
                     break;
+
+                case 'upload':
+                    msg.url = this.base_url + msg.url.split(':')[1];
+                    this.poster.postMessage(msg, '*', msg.transfer);
+                    break;
             }
         };
 
@@ -457,7 +468,7 @@ export class Streamer extends EventTarget {
         this.worker.postMessage({
             type: 'start',
             webm_metadata: {
-                max_segment_duration: BigInt(1000000000),
+                max_cluster_duration: BigInt(1000000000),
                 video: {
                     width: video_settings.width,
                     height: video_settings.height,
