@@ -9,6 +9,7 @@ import {
     max_video_config,
 } from './resolution.js';
 
+import empty_video_url from './empty-video.js';
 const go_live_el = document.getElementById('go-live');
 go_live_el.disabled = false;
 go_live_el.addEventListener('click', function () {
@@ -678,7 +679,7 @@ async function start() {
         // Safari on iOS requires us to play() in the click handler and doesn't
         // track async calls. So we play a blank video first. After that, the video
         // element is blessed for script-driven playback.
-        video_el.src = 'empty.mp4';
+        video_el.src = empty_video_url;
         await video_el.play();
 
         canvas_el.addEventListener('webglcontextlost', cleanup);
